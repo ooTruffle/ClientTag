@@ -10,7 +10,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import org.apache.logging.log4j.LogManager;
 
 /**
- * Shows Lunar Client, Dawn Client, Essential, NoRiskClient and LabyMod indicators next to the nametags of
+ * Shows Lunar Client, Dawn Client, Essential, NoRiskClient, LabyMod and Cosmetica indicators next to the nametags of
  * players who are on those clients.
  * <p>
  * Everything is driven from mixins (client tick + nametag render); the Lunar, Dawn,
@@ -57,6 +57,9 @@ public final class ClientTag {
         }
         if (!NativeClients.isRunning(ClientIcon.POLYPLUS)) {
             OneConfigTagManager.onClientTick();
+        }
+        if (!NativeClients.isRunning(ClientIcon.COSMETICA)) {
+            CosmeticaTagManager.onClientTick();
         }
     }
 
