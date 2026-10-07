@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${mod_version}",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
+  "authors": [
+    "ooTruffle"
+  ],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "${base_group}.modern.ModernEntrypoint"
+    ]
+  },
+  "mixins": [
+    "mixins.${mod_id}.json"
+  ],
+  "depends": {
+    "java": ">=${java_version}",
+    "minecraft": "${minecraft_version_range}",
+    "fabricloader": ">=${fabric_loader_version}"
+  },
+  "suggests": {
+    "oneconfigv1": ">=${oneconfig_version}"
+  }
+}

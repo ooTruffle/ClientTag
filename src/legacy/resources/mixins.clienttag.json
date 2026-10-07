@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "${base_group}.legacy.mixins",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "MinecraftMixin",
+    "RenderMixin",
+    "GuiPlayerTabOverlayMixin"
+  ]
+}

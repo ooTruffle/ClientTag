@@ -1,0 +1,11 @@
+{
+  "providers": [
+    {"type": "bitmap", "file": "clienttag:polyplus_badge.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "bitmap", "file": "clienttag:font/lunar.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "bitmap", "file": "clienttag:font/dawn.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "bitmap", "file": "clienttag:font/essential.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "bitmap", "file": "clienttag:font/norisk.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "bitmap", "file": "clienttag:font/labymod.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "space", "advances": {"": 2}}
+  ]
+}
