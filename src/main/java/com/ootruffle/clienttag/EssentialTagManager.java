@@ -5,6 +5,7 @@ import com.ootruffle.clienttag.essential.EssentialSocket;
 import com.ootruffle.clienttag.config.ClientTagSettings;
 import com.ootruffle.clienttag.render.ClientIcon;
 import com.ootruffle.clienttag.platform.Platform;
+import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
-import net.fabricmc.loader.api.FabricLoader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -45,15 +45,6 @@ public final class EssentialTagManager {
     private static final long MAX_BACKOFF_MS = 300_000;
     private static final long STABLE_CONNECTION_MS = 300_000;
 
-    /**
-     * Essential's loader stub registers as a mod, while the real mod is downloaded and loaded
-     * later - so its classes are looked for too. This class is first loaded on the first
-     * client tick, by which point Essential is loaded if it's going to be.
-     */
-    private static final boolean ESSENTIAL_INSTALLED = FabricLoader.getInstance().isModLoaded("essential")
-            || FabricLoader.getInstance().isModLoaded("essential-container")
-            || EssentialTagManager.class.getClassLoader().getResource("gg/essential/Essential.class") != null;
-
     private static final Set<UUID> iconUsers = ConcurrentHashMap.newKeySet();
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
@@ -80,13 +71,8 @@ public final class EssentialTagManager {
 
     /** The Essential indicator color (RGB), or null if they have no Essential icon (or it's not known yet). */
     public static Integer getEssentialColor(UUID uuid) {
-        // PolyPlus users are most likely running this mod, which logs them into Essential.
-        return iconUsers.contains(uuid) && !OneConfigCompat.isPolyPlusUser(uuid) ? COLOR : null;
-    }
-
-    /** Whether Essential itself is installed - it then draws its own indicator. */
-    public static boolean isEssentialInstalled() {
-        return ESSENTIAL_INSTALLED;
+        // ClientTag logs its users into every client, so theirs are only shown if they said they're really on it.
+        return iconUsers.contains(uuid) && !ClientTagUsers.hides(uuid, ClientIcon.ESSENTIAL) ? COLOR : null;
     }
 
     public static void onClientTick() {
@@ -124,7 +110,7 @@ public final class EssentialTagManager {
     private static void addTracked(Set<UUID> tracked, UUID uuid, UUID self) {
         // Real accounts have v4 UUIDs; Essential skips NPCs and nicked players (anything else) too.
         if (uuid != null && uuid.version() == 4 && !uuid.equals(self) && tracked.size() < MAX_TRACKED
-                && !OneConfigCompat.isPolyPlusUser(uuid)) {
+                && !ClientTagUsers.hides(uuid, ClientIcon.ESSENTIAL)) {
             tracked.add(uuid);
         }
     }
@@ -225,7 +211,7 @@ public final class EssentialTagManager {
 
         try {
             final Platform platform = Platform.get();
-            final String authorization = EssentialAuthenticator.authorize(platform.sessionName(), platform::joinServer);
+            final String authorization = EssentialAuthenticator.authorize(platform.sessionName(), SessionJoins::join);
             socket = EssentialSocket.connect(platform.sessionId(), platform.sessionName(), authorization,
                     (player, equipped) -> EXECUTOR.execute(() -> onEquipped(player, equipped)));
             connectedAt = System.currentTimeMillis();

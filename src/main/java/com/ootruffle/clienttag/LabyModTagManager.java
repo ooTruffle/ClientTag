@@ -5,6 +5,7 @@ import com.ootruffle.clienttag.labymod.LabyConnectSocket;
 import com.ootruffle.clienttag.labymod.LabyRoles;
 import com.ootruffle.clienttag.render.ClientIcon;
 import com.ootruffle.clienttag.platform.Platform;
+import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,9 +45,6 @@ public final class LabyModTagManager {
     private static final long MAX_BACKOFF_MS = 300_000;
     private static final long STABLE_CONNECTION_MS = 300_000;
 
-    private static final boolean LABYMOD_INSTALLED =
-            LabyModTagManager.class.getClassLoader().getResource("net/labymod/api/Laby.class") != null;
-
     /** LabyMod users -> their visible role (0 = none). */
     private static final Map<UUID, Integer> users = new ConcurrentHashMap<>();
     private static final AtomicReference<Map<UUID, String>> pendingTracked = new AtomicReference<>();
@@ -76,17 +74,12 @@ public final class LabyModTagManager {
     /** The LabyMod indicator color (RGB), or null if they're not on LabyMod (or it's not known yet). */
     public static Integer getLabyModColor(UUID uuid) {
         final Integer role = users.get(uuid);
-        // PolyPlus users are most likely running this mod, which logs them into LabyConnect.
-        if (role == null || OneConfigCompat.isPolyPlusUser(uuid)) {
+        // ClientTag logs its users into every client, so theirs are only shown if they said they're really on it.
+        if (role == null || ClientTagUsers.hides(uuid, ClientIcon.LABYMOD)) {
             return null;
         }
         final Integer color = role == 0 ? null : LabyRoles.color(role);
         return color != null ? color : DEFAULT_COLOR;
-    }
-
-    /** Whether LabyMod itself is running - it then draws its own indicator. */
-    public static boolean isLabyModInstalled() {
-        return LABYMOD_INSTALLED;
     }
 
     public static void onClientTick() {
@@ -125,7 +118,7 @@ public final class LabyModTagManager {
     private static void addTracked(Map<UUID, String> tracked, UUID uuid, String textures, UUID self) {
         // Real accounts have v4 UUIDs; LabyMod leaves NPCs and offline players out too.
         if (uuid == null || uuid.version() != 4 || uuid.equals(self) || tracked.containsKey(uuid)
-                || tracked.size() >= MAX_TRACKED || OneConfigCompat.isPolyPlusUser(uuid)) {
+                || tracked.size() >= MAX_TRACKED || ClientTagUsers.hides(uuid, ClientIcon.LABYMOD)) {
             return;
         }
         tracked.put(uuid, textures);
@@ -233,7 +226,7 @@ public final class LabyModTagManager {
         try {
             final Platform platform = Platform.get();
             socket = LabyConnectSocket.connect(platform.sessionName(), platform.sessionId(),
-                    platform::joinServer,
+                    SessionJoins::join,
                     new LabyConnectSocket.Listener() {
                         @Override
                         public void onUserData(UUID player, boolean usingLabyMod, int roleId) {

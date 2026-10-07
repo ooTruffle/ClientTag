@@ -6,6 +6,7 @@
     {"type": "bitmap", "file": "clienttag:font/essential.png", "ascent": 7, "height": 8, "chars": [""]},
     {"type": "bitmap", "file": "clienttag:font/norisk.png", "ascent": 7, "height": 8, "chars": [""]},
     {"type": "bitmap", "file": "clienttag:font/labymod.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "bitmap", "file": "clienttag:font/clienttag.png", "ascent": 7, "height": 8, "chars": [""]},
     {"type": "space", "advances": {"": 2}}
   ]
 }

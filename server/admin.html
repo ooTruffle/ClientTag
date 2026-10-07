@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClientTag Server</title>
+<style>
+  :root {
+    --bg: #f6f6f8; --panel: #ffffff; --text: #1d1d22; --muted: #6b6b76; --line: #e3e3e8;
+    --accent: #7c5cd6; --ok: #2f8a4f; --warn: #b7791f; --bad: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141418; --panel: #1d1d23; --text: #ececf1; --muted: #9a9aa6; --line: #2e2e36;
+      --accent: #b48cff; --ok: #5cc98a; --warn: #e0b04f; --bad: #ef6b5e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 20px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile, section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .tile { padding: 12px 14px; }
+  .tile .value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  section { padding: 14px; margin-bottom: 20px; overflow: hidden; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .bar h2 { margin: 0; margin-right: auto; }
+  input[type=search] { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 220px; font: inherit; }
+  label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+  .scroll { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 500; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.ua { font-family: ui-monospace, monospace; font-size: 12.5px; word-break: break-all; }
+  td.time { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); margin: 0 6px 6px 0; }
+  .ours { color: var(--accent); }
+  .s2 { color: var(--ok); } .s4 { color: var(--warn); } .s5 { color: var(--bad); }
+  #error { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ClientTag Server</h1>
+    <span class="muted" id="updated">Loading…</span>
+    <span id="error"></span>
+  </header>
+
+  <div class="tiles">
+    <div class="tile"><div class="muted">Live users</div><div class="value" id="live">–</div></div>
+    <div class="tile"><div class="muted">Signed-in tokens</div><div class="value" id="tokens">–</div></div>
+    <div class="tile"><div class="muted">User agents</div><div class="value" id="agentCount">–</div></div>
+    <div class="tile"><div class="muted">Uptime</div><div class="value" id="uptime">–</div></div>
+  </div>
+
+  <section>
+    <h2>Live users by client</h2>
+    <div id="clients" class="muted">None</div>
+  </section>
+
+  <section>
+    <div class="bar">
+      <h2>User agents since startup</h2>
+      <input type="search" id="agentFilter" placeholder="Filter user agents">
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>User agent</th><th>Requests</th><th>First seen</th><th>Last seen</th></tr></thead>
+        <tbody id="agents"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="bar">
+      <h2>Recent requests</h2>
+      <input type="search" id="requestFilter" placeholder="Filter by user agent, path or status">
+      <label><input type="checkbox" id="hideOurs"> Hide ClientTag</label>
+      <label><input type="checkbox" id="auto" checked> Auto-refresh</label>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Request</th><th>Status</th><th>ms</th><th>User agent</th></tr></thead>
+        <tbody id="requests"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script>
+  // Everything from the server (User-Agents especially) is untrusted: text only, never HTML.
+  let data = null;
+  const $ = (id) => document.getElementById(id);
+  const ours = (ua) => /^ClientTag\//.test(ua);
+  const time = (ms) => new Date(ms).toLocaleTimeString();
+  const dateTime = (ms) => new Date(ms).toLocaleString();
+
+  function cell(row, text, cls) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (cls) td.className = cls;
+    row.appendChild(td);
+    return td;
+  }
+
+  function uptime(ms) {
+    const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
+    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function render() {
+    if (!data) return;
+    $("live").textContent = data.live;
+    $("tokens").textContent = data.tokens;
+    $("agentCount").textContent = data.agents.length;
+    $("uptime").textContent = uptime(data.now - data.startedAt);
+    $("updated").textContent = `Updated ${time(data.now)}`;
+
+    const clients = $("clients");
+    clients.replaceChildren();
+    const entries = Object.entries(data.clients).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) clients.textContent = "None";
+    for (const [id, count] of entries) {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = `${id}: ${count}`;
+      clients.appendChild(chip);
+    }
+
+    const agentFilter = $("agentFilter").value.toLowerCase();
+    const agents = $("agents");
+    agents.replaceChildren();
+    for (const a of data.agents) {
+      if (agentFilter && !a.ua.toLowerCase().includes(agentFilter)) continue;
+      const row = document.createElement("tr");
+      cell(row, a.ua, ours(a.ua) ? "ua ours" : "ua");
+      cell(row, a.count, "num");
+      cell(row, dateTime(a.first), "time");
+      cell(row, dateTime(a.last), "time");
+      agents.appendChild(row);
+    }
+
+    const filter = $("requestFilter").value.toLowerCase();
+    const hideOurs = $("hideOurs").checked;
+    const requests = $("requests");
+    requests.replaceChildren();
+    for (const r of data.requests) {
+      if (hideOurs && ours(r.ua)) continue;
+      if (filter && !`${r.ua} ${r.method} ${r.path} ${r.status}`.toLowerCase().includes(filter)) continue;
+      const row = document.createElement("tr");
+      cell(row, time(r.time), "time");
+      cell(row, `${r.method} ${r.path}`);
+      cell(row, r.status, `num s${String(r.status)[0]}`);
+      cell(row, r.ms, "num");
+      cell(row, r.ua, ours(r.ua) ? "ua ours" : "ua");
+      requests.appendChild(row);
+    }
+  }
+
+  async function refresh() {
+    try {
+      // Against the origin, which never carries credentials typed into the address bar.
+      const response = await fetch(new URL("/admin/api", location.origin), { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      data = await response.json();
+      $("error").textContent = "";
+      render();
+    } catch (e) {
+      $("error").textContent = `Couldn't refresh: ${e.message}`;
+    }
+  }
+
+  for (const id of ["agentFilter", "requestFilter", "hideOurs"]) $(id).addEventListener("input", render);
+  setInterval(() => { if ($("auto").checked) refresh(); }, 5000);
+  refresh();
+</script>
+</body>
+</html>

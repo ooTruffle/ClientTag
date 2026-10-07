@@ -1,5 +1,6 @@
 package com.ootruffle.clienttag.render;
 
+import com.ootruffle.clienttag.ClientTagUsers;
 import com.ootruffle.clienttag.DawnTagManager;
 import com.ootruffle.clienttag.EssentialTagManager;
 import com.ootruffle.clienttag.LabyModTagManager;
@@ -17,7 +18,7 @@ import java.util.function.Function;
  * The client indicators a player can have, in left-to-right drawing order. Lunar, Dawn,
  * Essential, NoRisk and LabyMod icons are generated in code rather than shipped as assets, so none of those
  * clients' artwork is used: Lunar gets a crescent moon, Dawn a rising sun, Essential a sparkle,
- * NoRisk a shield, LabyMod a wolf head. PolyPlus gets its own
+ * NoRisk a shield, LabyMod a wolf head, and ClientTag itself a name tag. PolyPlus gets its own
  * badge (used with Polyfrost's permission), but only when PolyPlus isn't installed to draw it.
  * <p>
  * 1.8.9 paints each icon into a dynamic texture at runtime; modern versions draw them as
@@ -30,7 +31,9 @@ public enum ClientIcon {
     DAWN("dawn", DawnTagManager::getDawnColor, IconArt::sunrise),
     ESSENTIAL("essential", EssentialTagManager::getEssentialColor, IconArt::sparkle),
     NORISK("norisk", NoRiskTagManager::getNoRiskColor, IconArt::shield),
-    LABYMOD("labymod", LabyModTagManager::getLabyModColor, IconArt::wolf);
+    LABYMOD("labymod", LabyModTagManager::getLabyModColor, IconArt::wolf),
+    // Last, so the other icons keep their glyphs.
+    CLIENTTAG("clienttag", ClientTagUsers::getClientTagColor, IconArt::nametag);
 
     public static final int TEXTURE_SIZE = 32;
 
@@ -80,6 +83,16 @@ public enum ClientIcon {
             }
         }
         return icons;
+    }
+
+    /** The icon with this {@link #id()}, or null. */
+    public static ClientIcon byId(String id) {
+        for (ClientIcon icon : values()) {
+            if (icon.id.equals(id)) {
+                return icon;
+            }
+        }
+        return null;
     }
 
     /** Short lowercase name, e.g. "lunar". */
