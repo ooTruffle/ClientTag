@@ -15,7 +15,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Draws the client indicators (Lunar crescent, Dawn sunrise, Essential sparkle, NoRisk shield, LabyMod wolf) to the left of a player's
+ * Draws the client indicators (Lunar crescent, Dawn sunrise, Essential sparkle, NoRisk shield, LabyMod wolf, Cosmetica halo) to the left of a player's
  * nametag, each tinted with the color its client reports for them.
  * <p>
  * Called from {@code Render#renderLivingLabel} twice, matching vanilla's two text passes:

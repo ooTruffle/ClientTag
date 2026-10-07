@@ -96,6 +96,7 @@ public final class ClientTagSettings {
                 case NORISK: return c.noRiskEnabled;
                 case LABYMOD: return c.labyModEnabled;
                 case CLIENTTAG: return c.clientTagEnabled;
+                case COSMETICA: return c.cosmeticaEnabled;
                 default: return true;
             }
         }
@@ -110,6 +111,7 @@ public final class ClientTagSettings {
                 case NORISK: return custom(c.noRiskCustomColor, c.noRiskColor, reportedColor);
                 case LABYMOD: return custom(c.labyModCustomColor, c.labyModColor, reportedColor);
                 case CLIENTTAG: return custom(c.clientTagCustomColor, c.clientTagColor, reportedColor);
+                case COSMETICA: return custom(c.cosmeticaCustomColor, c.cosmeticaColor, reportedColor);
                 default: return reportedColor;
             }
         }

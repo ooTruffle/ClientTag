@@ -57,6 +57,9 @@ public final class NativeClients {
         if (anyMod("labymod") || anyClass("net/labymod/api/Laby.class")) {
             found.add(ClientIcon.LABYMOD);
         }
+        if (anyMod("cosmetica")) {
+            found.add(ClientIcon.COSMETICA);
+        }
         if (log && !found.isEmpty()) {
             LogManager.getLogger("ClientTag").info("Running alongside {} - leaving their indicators to them", found);
         }

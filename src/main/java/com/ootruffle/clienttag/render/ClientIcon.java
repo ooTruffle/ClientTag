@@ -1,6 +1,7 @@
 package com.ootruffle.clienttag.render;
 
 import com.ootruffle.clienttag.ClientTagUsers;
+import com.ootruffle.clienttag.CosmeticaTagManager;
 import com.ootruffle.clienttag.DawnTagManager;
 import com.ootruffle.clienttag.EssentialTagManager;
 import com.ootruffle.clienttag.LabyModTagManager;
@@ -19,7 +20,7 @@ import java.util.function.Function;
  * Essential, NoRisk and LabyMod icons are generated in code rather than shipped as assets, so none of those
  * clients' artwork is used: Lunar gets a crescent moon, Dawn a rising sun, Essential a sparkle,
  * NoRisk a shield, LabyMod a wolf head, and ClientTag itself a name tag. PolyPlus gets its own
- * badge (used with Polyfrost's permission), but only when PolyPlus isn't installed to draw it.
+ * badge (used with Polyfrost's permission), and Cosmetica its halo (at its lead dev's request), but only when PolyPlus isn't installed to draw it.
  * <p>
  * 1.8.9 paints each icon into a dynamic texture at runtime; modern versions draw them as
  * glyphs of the {@code clienttag:icons} bitmap font, whose textures {@link IconArt} paints at build time.
@@ -33,7 +34,9 @@ public enum ClientIcon {
     NORISK("norisk", NoRiskTagManager::getNoRiskColor, IconArt::shield),
     LABYMOD("labymod", LabyModTagManager::getLabyModColor, IconArt::wolf),
     // Last, so the other icons keep their glyphs.
-    CLIENTTAG("clienttag", ClientTagUsers::getClientTagColor, IconArt::nametag);
+    CLIENTTAG("clienttag", ClientTagUsers::getClientTagColor, IconArt::nametag),
+    // After ClientTag, so the other icons keep their glyphs.
+    COSMETICA("cosmetica", CosmeticaTagManager::getCosmeticaColor, IconArt.image("/assets/clienttag/textures/cosmetica_halo.png"));
 
     public static final int TEXTURE_SIZE = 32;
 
@@ -105,7 +108,7 @@ public enum ClientIcon {
         return (char) (0xE000 + ordinal());
     }
 
-    /** Paints the white (or, for PolyPlus, full-color) icon into TEXTURE_SIZE x TEXTURE_SIZE ARGB pixels. */
+    /** Paints the white (or, for PolyPlus and Cosmetica, full-color) icon into TEXTURE_SIZE x TEXTURE_SIZE ARGB pixels. */
     public void paint(int[] pixels) {
         painter.accept(pixels);
     }
