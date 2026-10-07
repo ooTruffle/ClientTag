@@ -6,3 +6,6 @@ run/
 out/
 .backup-pre-multiversion/
 versions/
+server/.env
+server/ecosystem.config.cjs
+server/node_modules/

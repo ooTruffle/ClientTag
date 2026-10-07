@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "package": "${base_group}.compat.mixins",
+  "plugin": "${base_group}.compat.PolyPlusMixinPlugin",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "client": [
+    "CosmeticCatalogMixin"
+  ]
+}

@@ -1,6 +1,7 @@
 package com.ootruffle.clienttag;
 
 import com.ootruffle.clienttag.config.ClientTagSettings;
+import com.ootruffle.clienttag.render.ClientIcon;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -31,19 +32,30 @@ public final class ClientTag {
 
     /** Called at the end of every client tick. */
     public static void onClientTick() {
-        LunarTagManager.onClientTick();
-        DawnTagManager.onClientTick();
-        NoRiskTagManager.onClientTick();
-        // Essential draws its own indicator, and a second connection could disrupt its own.
-        if (!EssentialTagManager.isEssentialInstalled()) {
+        NativeClients.settle();
+        // Nothing connects anywhere until the first-launch warning has been accepted.
+        if (!Consent.accepted()) {
+            Consent.askIfNeeded();
+            return;
+        }
+        ClientTagUsers.onClientTick();
+        // A client we're running on draws its own indicators, and a second connection could disrupt its own.
+        if (!NativeClients.isRunning(ClientIcon.LUNAR)) {
+            LunarTagManager.onClientTick();
+        }
+        if (!NativeClients.isRunning(ClientIcon.DAWN)) {
+            DawnTagManager.onClientTick();
+        }
+        if (!NativeClients.isRunning(ClientIcon.NORISK)) {
+            NoRiskTagManager.onClientTick();
+        }
+        if (!NativeClients.isRunning(ClientIcon.ESSENTIAL)) {
             EssentialTagManager.onClientTick();
         }
-        // Same for LabyMod.
-        if (!LabyModTagManager.isLabyModInstalled()) {
+        if (!NativeClients.isRunning(ClientIcon.LABYMOD)) {
             LabyModTagManager.onClientTick();
         }
-        // PolyPlus tracks its own users when it's installed.
-        if (!OneConfigCompat.isInstalled()) {
+        if (!NativeClients.isRunning(ClientIcon.POLYPLUS)) {
             OneConfigTagManager.onClientTick();
         }
     }
