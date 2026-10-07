@@ -2,9 +2,12 @@ package com.ootruffle.clienttag.legacy;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import com.ootruffle.clienttag.legacy.gui.QuestionScreen;
 import com.ootruffle.clienttag.platform.Platform;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.entity.player.EntityPlayer;
@@ -77,6 +80,27 @@ final class LegacyPlatform implements Platform {
     public void joinServer(String serverId) throws Exception {
         final Minecraft mc = Minecraft.getMinecraft();
         mc.getSessionService().joinServer(mc.getSession().getProfile(), mc.getSession().getToken(), serverId);
+    }
+
+    @Override
+    public boolean canAsk() {
+        // Ticks only start once 1.8.9 has finished loading.
+        return true;
+    }
+
+    @Override
+    public boolean isAsking() {
+        return Minecraft.getMinecraft().currentScreen instanceof QuestionScreen;
+    }
+
+    @Override
+    public void ask(String title, String message, String yes, String no, int delaySeconds, Consumer<Boolean> onAnswer) {
+        final Minecraft mc = Minecraft.getMinecraft();
+        final GuiScreen previous = mc.currentScreen;
+        mc.displayGuiScreen(new QuestionScreen(title, message, yes, no, delaySeconds, answer -> {
+            onAnswer.accept(answer);
+            mc.displayGuiScreen(previous);
+        }));
     }
 
 }

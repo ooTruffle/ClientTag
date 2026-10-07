@@ -1,6 +1,6 @@
 package com.ootruffle.clienttag.config;
 
-import com.ootruffle.clienttag.OneConfigCompat;
+import com.ootruffle.clienttag.NativeClients;
 import com.ootruffle.clienttag.render.ClientIcon;
 import net.fabricmc.loader.api.FabricLoader;
 import org.polyfrost.compose.render.PolyColor;
@@ -11,8 +11,8 @@ import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
  * The mod's settings, editable through OneConfig when it's installed (also via /clienttag).
  * Without OneConfig every client is shown everywhere in its reported color.
  * <p>
- * ClientTag's own PolyPlus tracking is always off while the PolyPlus mod is installed - it
- * draws its own badge then.
+ * A client is always off while the game is running on it (see {@link NativeClients}) - it
+ * draws its own indicators then, e.g. the PolyPlus mod draws its own badge.
  * <p>
  * {@link Present} is the only class touching OneConfig, and is never loaded without it.
  */
@@ -37,8 +37,14 @@ public final class ClientTagSettings {
         return !LOADED || Present.showInTab();
     }
 
+    /** Whether to share our real client with, and look players up on, the ClientTag server. */
+    public static boolean useServer() {
+        return !LOADED || Present.useServer();
+    }
+
     public static boolean isEnabled(ClientIcon icon) {
-        if (icon == ClientIcon.POLYPLUS && OneConfigCompat.isInstalled()) {
+        // A client we're running on draws its own indicators.
+        if (NativeClients.isRunning(icon)) {
             return false;
         }
         return !LOADED || Present.isEnabled(icon);
@@ -67,6 +73,10 @@ public final class ClientTagSettings {
             return config().showInTab;
         }
 
+        static boolean useServer() {
+            return config().useServer;
+        }
+
         static boolean isEnabled(ClientIcon icon) {
             final ClientTagConfig c = config();
             switch (icon) {
@@ -76,6 +86,7 @@ public final class ClientTagSettings {
                 case ESSENTIAL: return c.essentialEnabled;
                 case NORISK: return c.noRiskEnabled;
                 case LABYMOD: return c.labyModEnabled;
+                case CLIENTTAG: return c.clientTagEnabled;
                 default: return true;
             }
         }
@@ -89,6 +100,7 @@ public final class ClientTagSettings {
                 case ESSENTIAL: return custom(c.essentialCustomColor, c.essentialColor, reportedColor);
                 case NORISK: return custom(c.noRiskCustomColor, c.noRiskColor, reportedColor);
                 case LABYMOD: return custom(c.labyModCustomColor, c.labyModColor, reportedColor);
+                case CLIENTTAG: return custom(c.clientTagCustomColor, c.clientTagColor, reportedColor);
                 default: return reportedColor;
             }
         }

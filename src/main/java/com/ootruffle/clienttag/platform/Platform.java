@@ -1,6 +1,7 @@
 package com.ootruffle.clienttag.platform;
 
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Everything the version-independent code needs from Minecraft. 1.8.9 (Ornithe) and the
@@ -50,6 +51,19 @@ public interface Platform {
 
     /** Tells Mojang's session server we're joining {@code serverId}, as a server join would. */
     void joinServer(String serverId) throws Exception;
+
+    /** Whether the game has finished loading, so a question can be shown. */
+    boolean canAsk();
+
+    /** Whether the question from {@link #ask} is still on screen. */
+    boolean isAsking();
+
+    /**
+     * Asks the player a yes/no question over whatever is open (a menu, or the world), going
+     * back to it afterwards. The buttons only work after {@code delaySeconds}, so it gets read.
+     * {@code onAnswer} isn't called if something else replaces the question.
+     */
+    void ask(String title, String message, String yes, String no, int delaySeconds, Consumer<Boolean> onAnswer);
 
     final class Holder {
         private static Platform instance;

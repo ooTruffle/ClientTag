@@ -5,6 +5,7 @@ import com.ootruffle.clienttag.oneconfig.OneConfigAuthenticator;
 import com.ootruffle.clienttag.oneconfig.OneConfigSocket;
 import com.ootruffle.clienttag.render.ClientIcon;
 import com.ootruffle.clienttag.platform.Platform;
+import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -283,7 +284,7 @@ public final class OneConfigTagManager {
 
     private static String fetchToken() throws Exception {
         final Platform platform = Platform.get();
-        return OneConfigAuthenticator.fetchToken(platform.sessionName(), clientVersion(), "1.8.9", platform::joinServer);
+        return OneConfigAuthenticator.fetchToken(platform.sessionName(), clientVersion(), "1.8.9", SessionJoins::join);
     }
 
     /** "clienttag/1.0.0" - honest about which client is asking. */

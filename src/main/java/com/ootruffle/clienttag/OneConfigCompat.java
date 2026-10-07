@@ -3,6 +3,7 @@ package com.ootruffle.clienttag;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import com.ootruffle.clienttag.render.ClientIcon;
 import java.util.UUID;
 import net.fabricmc.loader.api.FabricLoader;
 import org.apache.logging.log4j.LogManager;
@@ -10,8 +11,8 @@ import org.apache.logging.log4j.LogManager;
 /**
  * Knows whether a player is online on PolyPlus (OneClient's companion mod). With PolyPlus
  * installed it's asked directly; without it, {@link OneConfigTagManager} asks PolyPlus's
- * servers instead. Those players are almost certainly running this mod too, and since
- * it logs into Lunar's socket they'd come back as Lunar users - so they're never looked up.
+ * servers instead. For players the ClientTag server doesn't know, being on PolyPlus is taken
+ * as a sign of running ClientTag (see {@link ClientTagUsers#hides}).
  * <p>
  * PolyPlus is reached reflectively ({@code CosmeticCatalog.INSTANCE.isPolyPlusUser}), so
  * one build works against every Minecraft version's PolyPlus without compiling against any.
@@ -33,7 +34,8 @@ public final class OneConfigCompat {
 
     /** The badge color for our own PolyPlus badge (untinted), or null if PolyPlus draws it or they're not on PolyPlus. */
     public static Integer getBadgeColor(UUID uuid) {
-        return !LOADED && OneConfigTagManager.isOnline(uuid) ? 0xFFFFFF : null;
+        // ClientTag logs its users into PolyPlus too, so theirs is only shown if they said they're really on it.
+        return !LOADED && OneConfigTagManager.isOnline(uuid) && !ClientTagUsers.hides(uuid, ClientIcon.POLYPLUS) ? 0xFFFFFF : null;
     }
 
     private static final class Present {

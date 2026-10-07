@@ -40,6 +40,7 @@ public final class IconArt {
         icons.put("essential", IconArt::sparkle);
         icons.put("norisk", IconArt::shield);
         icons.put("labymod", IconArt::wolf);
+        icons.put("clienttag", IconArt::nametag);
 
         final File dir = new File(args[0]);
         if (!dir.isDirectory() && !dir.mkdirs()) {
@@ -133,6 +134,13 @@ public final class IconArt {
         final double[] ys = {0.06, 0.28, 0.28, 0.06, 0.54, 0.74, 0.96, 0.74, 0.54};
         paint(pixels, (x, y) -> inPolygon(x, y, xs, ys)
                 && !inDisc(x, y, 0.36, 0.52, 0.065) && !inDisc(x, y, 0.64, 0.52, 0.065));
+    }
+
+    /** A luggage-style name tag pointing left, with a hole punched near the point. */
+    static void nametag(int[] pixels) {
+        final double[] xs = {0.04, 0.30, 0.96, 0.96, 0.30};
+        final double[] ys = {0.50, 0.20, 0.20, 0.80, 0.80};
+        paint(pixels, (x, y) -> inPolygon(x, y, xs, ys) && !inDisc(x, y, 0.27, 0.50, 0.08));
     }
 
     private static void paint(int[] pixels, Shape shape) {
