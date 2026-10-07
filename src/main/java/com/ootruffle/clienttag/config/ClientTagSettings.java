@@ -42,6 +42,11 @@ public final class ClientTagSettings {
         return !LOADED || Present.useServer();
     }
 
+    /** Whether to ask the ClientTag server to show other ClientTag users a ClientTag icon by our name. */
+    public static boolean showOwnTag() {
+        return !LOADED || Present.showOwnTag();
+    }
+
     public static boolean isEnabled(ClientIcon icon) {
         // A client we're running on draws its own indicators.
         if (NativeClients.isRunning(icon)) {
@@ -75,6 +80,10 @@ public final class ClientTagSettings {
 
         static boolean useServer() {
             return config().useServer;
+        }
+
+        static boolean showOwnTag() {
+            return config().showOwnTag;
         }
 
         static boolean isEnabled(ClientIcon icon) {

@@ -4,15 +4,21 @@
 //
 //   POST /v1/login  { name, serverId }  -> { token, uuid, expiresIn }
 //        after the client did a Mojang session server join with serverId (checked via hasJoined)
-//   POST /v1/sync   { clients: [id], lookup: [uuid] } -> { users: { uuid: [id] } }
-//        (Authorization: Bearer <token>) - refreshes our presence, answers for live users only
+//   POST /v1/sync   { clients: [id], showTag, lookup: [uuid] } -> { users: { uuid: [id] }, tags: { uuid: rgb } }
+//        (Authorization: Bearer <token>) - refreshes our presence, answers for live users only;
+//        tags are the users whose ClientTag icon is drawn, in their color (white unless the admin set one)
 //   POST /v1/leave  -> drops our presence
 //   GET  /health    -> ok
 //   GET  /admin     -> request log and User-Agent stats (HTTP Basic auth, password = ADMIN_PASSWORD)
+//   POST /admin/color { uuid, color: "#rrggbb" | null } -> sets a player's ClientTag icon color
+//
+// The only thing written to disk is the list of players who ever logged in (name, UUID, first/last
+// seen, color) in PLAYERS_FILE, so the admin can give them colors.
 
 import { createServer } from "node:http";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const HOST = process.env.HOST ?? "127.0.0.1";
 const PORT = Number(process.env.PORT ?? 8787);
@@ -28,6 +34,7 @@ const TRUSTED_PROXIES = new Set(["127.0.0.1", "::1", ...(process.env.TRUSTED_PRO
 // The /admin page is off unless a password is set.
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
 const ADMIN_PAGE = readFileSync(new URL("./admin.html", import.meta.url), "utf8");
+const PLAYERS_FILE = process.env.PLAYERS_FILE ?? fileURLToPath(new URL("./players.json", import.meta.url));
 
 const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 const PRESENCE_TTL_MS = 90 * 1000; // clients sync every 30 s
@@ -37,11 +44,15 @@ const MAX_LOOKUP = 512;
 const LOG_SIZE = 2000;
 const MAX_AGENTS = 5000;
 const CLIENT_IDS = new Set(["polyplus", "lunar", "dawn", "essential", "norisk", "labymod"]);
+const DEFAULT_TAG_COLOR = 0xffffff;
 
 // token -> { uuid, expires }
 const tokens = new Map();
-// uuid -> { clients, expires }
+// uuid -> { clients, showTag, expires }
 const presence = new Map();
+// uuid -> { name, first, last, color? } for everyone who ever logged in; kept in PLAYERS_FILE
+const players = loadPlayers();
+let playersSaveTimer = null;
 // serverIds already used for a login, so a join can't be replayed
 const usedServerIds = new Map();
 // rate limit buckets: key -> { count, resetAt }
@@ -64,6 +75,30 @@ function record(entry) {
   }
   agent.count++;
   agent.last = entry.time;
+}
+
+function loadPlayers() {
+  try {
+    return new Map(Object.entries(JSON.parse(readFileSync(PLAYERS_FILE, "utf8"))));
+  } catch (e) {
+    if (e.code !== "ENOENT") console.error(`Couldn't read ${PLAYERS_FILE}:`, e);
+    return new Map();
+  }
+}
+
+// Batches writes: a burst of logins (or a restart's worth of re-logins) is one write.
+function savePlayers() {
+  if (playersSaveTimer) return;
+  playersSaveTimer = setTimeout(() => {
+    playersSaveTimer = null;
+    try {
+      const tmp = `${PLAYERS_FILE}.tmp`;
+      writeFileSync(tmp, JSON.stringify(Object.fromEntries(players), null, 1));
+      renameSync(tmp, PLAYERS_FILE);
+    } catch (e) {
+      console.error(`Couldn't write ${PLAYERS_FILE}:`, e);
+    }
+  }, 2000);
 }
 
 function sha256(text) {
@@ -107,11 +142,63 @@ function admin(req, res, path) {
       live,
       tokens: tokens.size,
       clients,
+      players: [...players].map(([uuid, p]) => {
+        const entry = presence.get(uuid);
+        const online = !!entry && entry.expires > now;
+        return { uuid, ...p, online, showsTag: online && showsTag(entry) };
+      }).sort((x, y) => y.last - x.last),
       agents: [...agents].map(([ua, a]) => ({ ua, ...a })).sort((x, y) => y.count - x.count),
       requests: requestLog.slice().reverse(),
     }, { "Cache-Control": "no-store" });
   }
   return send(res, 404, { error: "not found" });
+}
+
+async function adminColor(req, res) {
+  if (!ADMIN_PASSWORD) return send(res, 404, { error: "not found" });
+  if (!isAdmin(req)) return send(res, 401, { error: "unauthorized" });
+  // The browser re-sends Basic auth to any site's form posts, so only take JSON from our own page:
+  // cross-site JSON needs a CORS preflight this server never answers.
+  const origin = req.headers.origin;
+  if (!String(req.headers["content-type"] ?? "").startsWith("application/json")
+      || (origin && hostOf(origin) !== req.headers.host)) {
+    return send(res, 403, { error: "forbidden" });
+  }
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return send(res, 400, { error: "bad body" });
+  }
+  const player = typeof body?.uuid === "string" && players.get(body.uuid.toLowerCase());
+  if (!player) return send(res, 404, { error: "unknown player" });
+  if (body.color === null) {
+    delete player.color;
+  } else if (typeof body.color === "string" && /^#[0-9a-fA-F]{6}$/.test(body.color)) {
+    player.color = body.color.toLowerCase();
+  } else {
+    return send(res, 400, { error: "bad color" });
+  }
+  savePlayers();
+  return send(res, 200, {});
+}
+
+function hostOf(url) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
+// A ClientTag user's icon is drawn if they asked for it, or if they're on no other client.
+function showsTag(entry) {
+  return entry.showTag || entry.clients.length === 0;
+}
+
+function tagColor(uuid) {
+  const color = players.get(uuid)?.color;
+  return color ? parseInt(color.slice(1), 16) : DEFAULT_TAG_COLOR;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -145,6 +232,13 @@ async function login(body, ip) {
   if (typeof profile?.id !== "string" || !/^[0-9a-fA-F]{32}$/.test(profile.id)) return [502, { error: "bad Mojang response" }];
 
   const uuid = dashed(profile.id);
+  const now = Date.now();
+  const player = players.get(uuid) ?? { first: now };
+  player.name = typeof profile.name === "string" ? profile.name.slice(0, 16) : name;
+  player.last = now;
+  players.set(uuid, player);
+  savePlayers();
+
   const token = randomBytes(32).toString("base64url");
   tokens.set(token, { uuid, expires: Date.now() + TOKEN_TTL_MS });
   return [200, { token, uuid, expiresIn: TOKEN_TTL_MS / 1000 }];
@@ -155,9 +249,10 @@ function sync(session, body) {
   const clients = Array.isArray(body.clients)
     ? [...new Set(body.clients.filter((id) => CLIENT_IDS.has(id)))]
     : [];
-  presence.set(session.uuid, { clients, expires: Date.now() + PRESENCE_TTL_MS });
+  presence.set(session.uuid, { clients, showTag: body.showTag === true, expires: Date.now() + PRESENCE_TTL_MS });
 
   const users = {};
+  const tags = {};
   if (Array.isArray(body.lookup)) {
     const now = Date.now();
     for (const raw of body.lookup.slice(0, MAX_LOOKUP)) {
@@ -165,10 +260,12 @@ function sync(session, body) {
       const uuid = raw.toLowerCase();
       if (!UUID_RE.test(uuid)) continue;
       const entry = presence.get(uuid);
-      if (entry && entry.expires > now) users[uuid] = entry.clients;
+      if (!entry || entry.expires <= now) continue;
+      users[uuid] = entry.clients;
+      if (showsTag(entry)) tags[uuid] = tagColor(uuid);
     }
   }
-  return [200, { users }];
+  return [200, { users, tags }];
 }
 
 function authenticate(req) {
@@ -228,6 +325,7 @@ const server = createServer(async (req, res) => {
   }
   try {
     if (req.method === "GET" && (path === "/admin" || path === "/admin/api")) return admin(req, res, path);
+    if (req.method === "POST" && path === "/admin/color") return await adminColor(req, res);
     if (req.method === "GET" && path === "/health") return send(res, 200, { ok: true });
     if (req.method !== "POST") return send(res, 404, { error: "not found" });
 
