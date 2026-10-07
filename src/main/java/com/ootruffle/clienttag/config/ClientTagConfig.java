@@ -32,6 +32,9 @@ public final class ClientTagConfig extends Config {
     @Switch(title = "Use ClientTag Server", description = "Share which client you're really on with other ClientTag users, and learn theirs, so only real tags are shown. Anyone can look players up on this server.", subcategory = "ClientTag Server")
     public boolean useServer = true;
 
+    @Switch(title = "Show My ClientTag Icon", description = "Show other ClientTag users a ClientTag icon by your name, next to the icon of the client you're on. It's always shown when you're on none.", subcategory = "ClientTag Server")
+    public boolean showOwnTag = true;
+
     @Switch(title = "Show Lunar Client", category = "Lunar Client")
     public boolean lunarEnabled = true;
     @Switch(title = "Custom Color", description = "Use one color for everyone instead of the color Lunar reports.", category = "Lunar Client")
@@ -67,12 +70,12 @@ public final class ClientTagConfig extends Config {
     @Color(title = "Color", category = "LabyMod", alpha = false)
     public PolyColor labyModColor = new PolyColor(0xFFD8D8D8);
 
-    @Switch(title = "Show ClientTag", description = "For ClientTag users who aren't on any other client. Needs the ClientTag server.", category = "ClientTag")
+    @Switch(title = "Show ClientTag", description = "For ClientTag users who chose to show it, or aren't on any other client. Needs the ClientTag server.", category = "ClientTag")
     public boolean clientTagEnabled = true;
-    @Switch(title = "Custom Color", description = "Use another color instead of ClientTag's own.", category = "ClientTag")
+    @Switch(title = "Custom Color", description = "Use one color for everyone instead of the color the ClientTag server gives each player.", category = "ClientTag")
     public boolean clientTagCustomColor = false;
     @Color(title = "Color", category = "ClientTag", alpha = false)
-    public PolyColor clientTagColor = new PolyColor(0xFFB48CFF);
+    public PolyColor clientTagColor = new PolyColor(0xFFFFFFFF);
 
     @Switch(title = "Show OneClient", description = "Unavailable while the PolyPlus mod is installed - it draws the OneClient badge itself.", category = "OneClient")
     public boolean polyPlusEnabled = true;
@@ -94,6 +97,7 @@ public final class ClientTagConfig extends Config {
         hideIf("noRiskColor", () -> !noRiskCustomColor);
         hideIf("labyModColor", () -> !labyModCustomColor);
         hideIf("clientTagColor", () -> !clientTagCustomColor);
+        hideIf("showOwnTag", () -> !useServer);
         hideIf("polyPlusColor", () -> !polyPlusCustomColor || NativeClients.isRunning(ClientIcon.POLYPLUS));
         // A client we're running on draws its own indicators, so its options here don't apply.
         notOn(ClientIcon.LUNAR, "Not running on Lunar Client", "lunarEnabled", "lunarCustomColor", "lunarColor");

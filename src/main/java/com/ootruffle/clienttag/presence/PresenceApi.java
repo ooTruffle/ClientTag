@@ -25,7 +25,8 @@ import net.fabricmc.loader.api.FabricLoader;
  * they're really playing on, and ask it about the players around them.
  * <ul>
  *     <li>{@code POST /v1/login} { name, serverId } -> { token, expiresIn }, after a Mojang session server join with serverId</li>
- *     <li>{@code POST /v1/sync} { clients, lookup } -> { users: { uuid: [client ids] } }, refreshes our own presence</li>
+ *     <li>{@code POST /v1/sync} { clients, showTag, lookup } -> { users: { uuid: [client ids] }, tags: { uuid: rgb } },
+ *     refreshes our own presence</li>
  *     <li>{@code POST /v1/leave} -> drops our presence right away</li>
  * </ul>
  * The server is {@value #DEFAULT_URL} unless {@code -Dclienttag.server=<url>} says otherwise.
@@ -67,6 +68,14 @@ public final class PresenceApi {
         }
     }
 
+    /** What a sync found out about the players looked up. */
+    public static final class SyncResult {
+        /** ClientTag users -> the clients they're really on. */
+        public final Map<UUID, List<String>> users = new HashMap<>();
+        /** ClientTag users whose ClientTag icon should be drawn -> its color (RGB). */
+        public final Map<UUID, Integer> tags = new HashMap<>();
+    }
+
     private PresenceApi() {}
 
     public static Token login(String name, SessionJoiner joiner) throws Exception {
@@ -87,29 +96,39 @@ public final class PresenceApi {
     }
 
     /**
-     * Refreshes our presence as a user of {@code clients} and returns which of {@code lookup}
-     * are ClientTag users, with the clients they're really on.
+     * Refreshes our presence as a user of {@code clients} (asking for our ClientTag icon to be
+     * shown to others if {@code showTag}) and returns which of {@code lookup} are ClientTag users,
+     * with the clients they're really on and the color of their ClientTag icon if it's shown.
      */
-    public static Map<UUID, List<String>> sync(Token token, Collection<String> clients, Collection<UUID> lookup) throws IOException {
+    public static SyncResult sync(Token token, Collection<String> clients, boolean showTag, Collection<UUID> lookup) throws IOException {
         final JsonObject body = new JsonObject();
         final JsonArray clientArray = new JsonArray();
         // add(JsonPrimitive), not add(String): 1.8.9 ships Gson 2.2.4.
         clients.forEach(id -> clientArray.add(new JsonPrimitive(id)));
         body.add("clients", clientArray);
+        body.addProperty("showTag", showTag);
         final JsonArray lookupArray = new JsonArray();
         lookup.forEach(uuid -> lookupArray.add(new JsonPrimitive(uuid.toString())));
         body.add("lookup", lookupArray);
 
-        final JsonElement users = post("/v1/sync", token, body).get("users");
-        final Map<UUID, List<String>> result = new HashMap<>();
+        final JsonObject response = post("/v1/sync", token, body);
+        final SyncResult result = new SyncResult();
+        final JsonElement tags = response.get("tags");
+        if (tags != null && tags.isJsonObject()) {
+            for (Map.Entry<String, JsonElement> entry : tags.getAsJsonObject().entrySet()) {
+                final UUID uuid = parseUuid(entry.getKey());
+                if (uuid != null && entry.getValue().isJsonPrimitive() && entry.getValue().getAsJsonPrimitive().isNumber()) {
+                    result.tags.put(uuid, entry.getValue().getAsInt() & 0xFFFFFF);
+                }
+            }
+        }
+        final JsonElement users = response.get("users");
         if (users == null || !users.isJsonObject()) {
             return result;
         }
         for (Map.Entry<String, JsonElement> entry : users.getAsJsonObject().entrySet()) {
-            final UUID uuid;
-            try {
-                uuid = UUID.fromString(entry.getKey());
-            } catch (IllegalArgumentException e) {
+            final UUID uuid = parseUuid(entry.getKey());
+            if (uuid == null) {
                 continue;
             }
             final List<String> ids = new ArrayList<>();
@@ -120,9 +139,17 @@ public final class PresenceApi {
                     }
                 }
             }
-            result.put(uuid, ids);
+            result.users.put(uuid, ids);
         }
         return result;
+    }
+
+    private static UUID parseUuid(String text) {
+        try {
+            return UUID.fromString(text);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public static void leave(Token token) throws IOException {
