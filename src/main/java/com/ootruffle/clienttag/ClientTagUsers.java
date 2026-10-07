@@ -39,9 +39,6 @@ public final class ClientTagUsers {
     private static final Logger LOGGER = LogManager.getLogger("ClientTag");
 
     // At most one request every 5 s (the server allows 30 a minute).
-    /** Our own color for the ClientTag icon. */
-    private static final int COLOR = 0xB48CFF;
-
     private static final int SYNC_INTERVAL_TICKS = 100;
     private static final int MAX_TRACKED = 512;
     private static final long HEARTBEAT_MS = 30_000;
@@ -51,6 +48,8 @@ public final class ClientTagUsers {
 
     /** ClientTag users around us -> the clients they're really on (empty for plain Fabric/Ornithe). */
     private static final Map<UUID, Set<ClientIcon>> users = new ConcurrentHashMap<>();
+    /** ClientTag users around us whose ClientTag icon is shown -> its color, set by the server's admin (white by default). */
+    private static final Map<UUID, Integer> tagColors = new ConcurrentHashMap<>();
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-Server");
@@ -74,10 +73,12 @@ public final class ClientTagUsers {
 
     private ClientTagUsers() {}
 
-    /** The ClientTag icon color (RGB) for ClientTag users who aren't really on any other client, else null. */
+    /**
+     * The ClientTag icon color (RGB) for ClientTag users who chose to show it or aren't really on
+     * any other client, else null.
+     */
     public static Integer getClientTagColor(UUID uuid) {
-        final Set<ClientIcon> clients = users.get(uuid);
-        return clients != null && clients.isEmpty() ? COLOR : null;
+        return tagColors.get(uuid);
     }
 
     /** Whether the ClientTag server says this player runs ClientTag but isn't really on {@code icon}'s client. */
@@ -136,6 +137,7 @@ public final class ClientTagUsers {
         active = nowActive;
         looked.clear();
         users.clear();
+        tagColors.clear();
         lastHeartbeat = 0;
         // Out of a world nobody can see our tags, so there's no point staying listed.
         if (!nowActive && present && token != null) {
@@ -158,6 +160,7 @@ public final class ClientTagUsers {
         // Players who left are forgotten; new ones are looked up now, everyone on the heartbeat.
         looked.retainAll(tracked);
         users.keySet().retainAll(tracked);
+        tagColors.keySet().retainAll(tracked);
         final boolean heartbeat = now - lastHeartbeat >= HEARTBEAT_MS;
         final List<UUID> lookup = new ArrayList<>();
         for (UUID uuid : tracked) {
@@ -175,17 +178,23 @@ public final class ClientTagUsers {
                 token = PresenceApi.login(platform.sessionName(), SessionJoins::join);
                 LOGGER.info("Connected to the ClientTag server ({})", PresenceApi.URL);
             }
-            final Map<UUID, List<String>> found = PresenceApi.sync(token, ownClients(), lookup);
+            final PresenceApi.SyncResult found = PresenceApi.sync(token, ownClients(), ClientTagSettings.showOwnTag(), lookup);
             present = true;
             if (heartbeat) {
                 lastHeartbeat = now;
             }
             for (UUID uuid : lookup) {
-                final List<String> ids = found.get(uuid);
+                final List<String> ids = found.users.get(uuid);
                 if (ids == null) {
                     users.remove(uuid);
                 } else {
                     users.put(uuid, toIcons(ids));
+                }
+                final Integer color = found.tags.get(uuid);
+                if (color == null) {
+                    tagColors.remove(uuid);
+                } else {
+                    tagColors.put(uuid, color);
                 }
             }
             looked.addAll(lookup);
