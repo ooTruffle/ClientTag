@@ -42,6 +42,13 @@
   .ours { color: var(--accent); }
   .s2 { color: var(--ok); } .s4 { color: var(--warn); } .s5 { color: var(--bad); }
   #error { color: var(--bad); }
+  td.uuid { font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin-right: 6px; }
+  .dot.on { background: var(--ok); }
+  .swatch { display: inline-flex; gap: 8px; align-items: center; }
+  input[type=color] { width: 34px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; cursor: pointer; }
+  button { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
 </style>
 </head>
 <body>
@@ -54,6 +61,7 @@
 
   <div class="tiles">
     <div class="tile"><div class="muted">Live users</div><div class="value" id="live">–</div></div>
+    <div class="tile"><div class="muted">Known players</div><div class="value" id="playerCount">–</div></div>
     <div class="tile"><div class="muted">Signed-in tokens</div><div class="value" id="tokens">–</div></div>
     <div class="tile"><div class="muted">User agents</div><div class="value" id="agentCount">–</div></div>
     <div class="tile"><div class="muted">Uptime</div><div class="value" id="uptime">–</div></div>
@@ -62,6 +70,20 @@
   <section>
     <h2>Live users by client</h2>
     <div id="clients" class="muted">None</div>
+  </section>
+
+  <section>
+    <div class="bar">
+      <h2>Players</h2>
+      <span class="muted">ClientTag icon color, shown to other ClientTag users within ~30 s. White unless set.</span>
+      <input type="search" id="playerFilter" placeholder="Filter by name or UUID">
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Player</th><th>UUID</th><th>Icon shown</th><th>Color</th><th>First seen</th><th>Last login</th></tr></thead>
+        <tbody id="players"></tbody>
+      </table>
+    </div>
   </section>
 
   <section>
@@ -113,9 +135,79 @@
     return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
   }
 
+  // Player rows are kept and updated in place, so a refresh doesn't close an open color picker.
+  const playerRows = new Map();
+
+  function playerRow(uuid) {
+    let row = playerRows.get(uuid);
+    if (row) return row;
+    row = document.createElement("tr");
+    const name = cell(row, "");
+    name.prepend(document.createElement("span"));
+    name.firstChild.className = "dot";
+    name.append(document.createElement("span"));
+    cell(row, uuid, "uuid");
+    cell(row, "");
+    const colorCell = cell(row, "");
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    const picker = document.createElement("input");
+    picker.type = "color";
+    picker.title = "ClientTag icon color";
+    picker.addEventListener("change", () => setColor(uuid, picker.value));
+    const reset = document.createElement("button");
+    reset.textContent = "Default";
+    reset.title = "Back to white";
+    reset.addEventListener("click", () => setColor(uuid, null));
+    swatch.append(picker, reset);
+    colorCell.append(swatch);
+    cell(row, "", "time");
+    cell(row, "", "time");
+    playerRows.set(uuid, row);
+    return row;
+  }
+
+  function renderPlayers() {
+    const filter = $("playerFilter").value.toLowerCase();
+    const body = $("players");
+    const rows = [];
+    for (const p of data.players) {
+      if (filter && !`${p.name} ${p.uuid}`.toLowerCase().includes(filter)) continue;
+      const row = playerRow(p.uuid);
+      const [name, , shown, color, first, last] = row.children;
+      name.firstChild.className = p.online ? "dot on" : "dot";
+      name.firstChild.title = p.online ? "Online" : "Offline";
+      name.lastChild.textContent = p.name;
+      shown.textContent = p.online ? (p.showsTag ? "Yes" : "No") : "–";
+      const [picker, reset] = color.firstChild.children;
+      if (document.activeElement !== picker) picker.value = p.color ?? "#ffffff";
+      reset.disabled = !p.color;
+      first.textContent = dateTime(p.first);
+      last.textContent = dateTime(p.last);
+      rows.push(row);
+    }
+    body.replaceChildren(...rows);
+  }
+
+  async function setColor(uuid, color) {
+    try {
+      const response = await fetch(new URL("/admin/color", location.origin), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uuid, color }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      $("error").textContent = "";
+    } catch (e) {
+      $("error").textContent = `Couldn't set color: ${e.message}`;
+    }
+    refresh();
+  }
+
   function render() {
     if (!data) return;
     $("live").textContent = data.live;
+    $("playerCount").textContent = data.players.length;
     $("tokens").textContent = data.tokens;
     $("agentCount").textContent = data.agents.length;
     $("uptime").textContent = uptime(data.now - data.startedAt);
@@ -131,6 +223,8 @@
       chip.textContent = `${id}: ${count}`;
       clients.appendChild(chip);
     }
+
+    renderPlayers();
 
     const agentFilter = $("agentFilter").value.toLowerCase();
     const agents = $("agents");
@@ -175,7 +269,7 @@
     }
   }
 
-  for (const id of ["agentFilter", "requestFilter", "hideOurs"]) $(id).addEventListener("input", render);
+  for (const id of ["playerFilter", "agentFilter", "requestFilter", "hideOurs"]) $(id).addEventListener("input", render);
   setInterval(() => { if ($("auto").checked) refresh(); }, 5000);
   refresh();
 </script>
