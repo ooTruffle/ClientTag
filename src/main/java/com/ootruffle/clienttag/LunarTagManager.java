@@ -6,6 +6,7 @@ import com.ootruffle.clienttag.lunar.ServerMappings;
 import com.ootruffle.clienttag.config.ClientTagSettings;
 import com.ootruffle.clienttag.render.ClientIcon;
 import com.ootruffle.clienttag.platform.Platform;
+import com.ootruffle.clienttag.platform.SessionJoins;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -75,8 +76,8 @@ public final class LunarTagManager {
     /** The player's Lunar icon color (RGB), or null if they're not on Lunar (or not known yet). */
     public static Integer getLunarColor(UUID uuid) {
         final Integer color = lunarColors.get(uuid);
-        // PolyPlus may learn about a player after Lunar already answered for them.
-        return color == null || OneConfigCompat.isPolyPlusUser(uuid) ? null : color;
+        // We may learn a player runs ClientTag after Lunar already answered for them.
+        return color == null || ClientTagUsers.hides(uuid, ClientIcon.LUNAR) ? null : color;
     }
 
     public static void onClientTick() {
@@ -104,9 +105,9 @@ public final class LunarTagManager {
         final Set<UUID> visible = new HashSet<>();
         platform.forEachWorldPlayer((uuid, textures) -> {
             // Real accounts have v4 UUIDs; server-side NPCs (v2 on Hypixel) can't be Lunar users.
-            // The real client never looks itself up either. PolyPlus users are most likely
-            // running this mod, which would make them show up as Lunar users.
-            if (uuid.version() == 4 && !uuid.equals(self) && !OneConfigCompat.isPolyPlusUser(uuid)) {
+            // The real client never looks itself up either. ClientTag users who aren't really
+            // on Lunar would show up as Lunar users, since ClientTag logs them in.
+            if (uuid.version() == 4 && !uuid.equals(self) && !ClientTagUsers.hides(uuid, ClientIcon.LUNAR)) {
                 visible.add(uuid);
             }
         });
@@ -230,7 +231,7 @@ public final class LunarTagManager {
 
         final Platform platform = Platform.get();
         try {
-            final String jwt = LunarAuthenticator.fetchToken(platform.sessionId(), platform.sessionName(), platform::joinServer);
+            final String jwt = LunarAuthenticator.fetchToken(platform.sessionId(), platform.sessionName(), SessionJoins::join);
             final LunarSocket connected = LunarSocket.connect(platform.sessionId(), platform.sessionName(), jwt, installationId());
             try {
                 connected.login();

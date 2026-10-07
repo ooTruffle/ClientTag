@@ -4,15 +4,22 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.ootruffle.clienttag.platform.Platform;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.network.chat.Component;
 
 /** {@link Platform} for the Fabric versions, in Mojang names. */
 final class ModernPlatform implements Platform {
+
+    /** The question on screen, if any. Client thread only. */
+    private Screen question;
 
     @Override
     public String currentServerAddress() {
@@ -92,6 +99,58 @@ final class ModernPlatform implements Platform {
         mc.services().sessionService().joinServer(mc.getUser().getProfileId(), mc.getUser().getAccessToken(), serverId);
         //?} else
         /*mc.getMinecraftSessionService().joinServer(mc.getUser().getProfileId(), mc.getUser().getAccessToken(), serverId);*/
+    }
+
+    @Override
+    public boolean canAsk() {
+        final Minecraft mc = Minecraft.getInstance();
+        //? if >= 26.2 {
+        return mc.gui.overlay() == null;
+        //?} else
+        /*return mc.getOverlay() == null;*/
+    }
+
+    @Override
+    public boolean isAsking() {
+        return question != null && screen(Minecraft.getInstance()) == question;
+    }
+
+    @Override
+    public void ask(String title, String message, String yes, String no, int delaySeconds, Consumer<Boolean> onAnswer) {
+        final Minecraft mc = Minecraft.getInstance();
+        final Screen previous = screen(mc);
+        final long readyAt = System.currentTimeMillis() + delaySeconds * 1000L;
+        question = new ConfirmScreen(answer -> {
+            question = null;
+            onAnswer.accept(answer);
+            setScreen(mc, previous);
+        }, Component.literal(title), Component.literal(message), Component.literal(yes), Component.literal(no)) {
+            @Override
+            protected void init() {
+                super.init();
+                // setDelay only covers buttons that exist, and init (e.g. on resize) makes new ones.
+                final long left = readyAt - System.currentTimeMillis();
+                if (left > 0) {
+                    setDelay((int) Math.max(1, left / 50));
+                }
+            }
+        };
+        setScreen(mc, question);
+    }
+
+    // The current screen moved to Gui in 26.2.
+    private static Screen screen(Minecraft mc) {
+        //? if >= 26.2 {
+        return mc.gui.screen();
+        //?} else
+        /*return mc.screen;*/
+    }
+
+    private static void setScreen(Minecraft mc, Screen screen) {
+        //? if >= 26.2 {
+        mc.gui.setScreen(screen);
+        //?} else
+        /*mc.setScreen(screen);*/
     }
 
 }

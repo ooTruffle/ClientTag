@@ -1,6 +1,7 @@
 package com.ootruffle.clienttag.config;
 
-import com.ootruffle.clienttag.OneConfigCompat;
+import com.ootruffle.clienttag.NativeClients;
+import com.ootruffle.clienttag.render.ClientIcon;
 import org.polyfrost.compose.render.PolyColor;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,6 +28,9 @@ public final class ClientTagConfig extends Config {
 
     @Switch(title = "Show in Tab List", subcategory = "Display")
     public boolean showInTab = true;
+
+    @Switch(title = "Use ClientTag Server", description = "Share which client you're really on with other ClientTag users, and learn theirs, so only real tags are shown. Anyone can look players up on this server.", subcategory = "ClientTag Server")
+    public boolean useServer = true;
 
     @Switch(title = "Show Lunar Client", category = "Lunar Client")
     public boolean lunarEnabled = true;
@@ -63,6 +67,13 @@ public final class ClientTagConfig extends Config {
     @Color(title = "Color", category = "LabyMod", alpha = false)
     public PolyColor labyModColor = new PolyColor(0xFFD8D8D8);
 
+    @Switch(title = "Show ClientTag", description = "For ClientTag users who aren't on any other client. Needs the ClientTag server.", category = "ClientTag")
+    public boolean clientTagEnabled = true;
+    @Switch(title = "Custom Color", description = "Use another color instead of ClientTag's own.", category = "ClientTag")
+    public boolean clientTagCustomColor = false;
+    @Color(title = "Color", category = "ClientTag", alpha = false)
+    public PolyColor clientTagColor = new PolyColor(0xFFB48CFF);
+
     @Switch(title = "Show OneClient", description = "Unavailable while the PolyPlus mod is installed - it draws the OneClient badge itself.", category = "OneClient")
     public boolean polyPlusEnabled = true;
     @Switch(title = "Custom Color", description = "Tint the OneClient badge.", category = "OneClient")
@@ -82,14 +93,22 @@ public final class ClientTagConfig extends Config {
         hideIf("essentialColor", () -> !essentialCustomColor);
         hideIf("noRiskColor", () -> !noRiskCustomColor);
         hideIf("labyModColor", () -> !labyModCustomColor);
-        hideIf("polyPlusColor", () -> !polyPlusCustomColor || OneConfigCompat.isInstalled());
-        // The PolyPlus mod draws its own badge when installed, so ClientTag's OneConfig options don't apply.
-        addDependency("polyPlusEnabled", "PolyPlus mod not installed", ClientTagConfig::polyPlusDisplay);
-        addDependency("polyPlusCustomColor", "PolyPlus mod not installed", ClientTagConfig::polyPlusDisplay);
+        hideIf("clientTagColor", () -> !clientTagCustomColor);
+        hideIf("polyPlusColor", () -> !polyPlusCustomColor || NativeClients.isRunning(ClientIcon.POLYPLUS));
+        // A client we're running on draws its own indicators, so its options here don't apply.
+        notOn(ClientIcon.LUNAR, "Not running on Lunar Client", "lunarEnabled", "lunarCustomColor", "lunarColor");
+        notOn(ClientIcon.DAWN, "Not running on Dawn Client", "dawnEnabled", "dawnCustomColor", "dawnColor");
+        notOn(ClientIcon.ESSENTIAL, "Essential not installed", "essentialEnabled", "essentialCustomColor", "essentialColor");
+        notOn(ClientIcon.NORISK, "Not running on NoRiskClient", "noRiskEnabled", "noRiskCustomColor", "noRiskColor");
+        notOn(ClientIcon.LABYMOD, "Not running on LabyMod", "labyModEnabled", "labyModCustomColor", "labyModColor");
+        notOn(ClientIcon.POLYPLUS, "PolyPlus mod not installed", "polyPlusEnabled", "polyPlusCustomColor");
     }
 
-    private static Property.Display polyPlusDisplay() {
-        return OneConfigCompat.isInstalled() ? Property.Display.DISABLED : Property.Display.SHOWN;
+    private void notOn(ClientIcon icon, String condition, String... options) {
+        for (String option : options) {
+            addDependency(option, condition,
+                    () -> NativeClients.isRunning(icon) ? Property.Display.DISABLED : Property.Display.SHOWN);
+        }
     }
 
 }

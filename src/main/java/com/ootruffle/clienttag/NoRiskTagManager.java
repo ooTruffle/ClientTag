@@ -8,6 +8,7 @@ import com.ootruffle.clienttag.norisk.NoRiskSocket;
 import com.ootruffle.clienttag.config.ClientTagSettings;
 import com.ootruffle.clienttag.render.ClientIcon;
 import com.ootruffle.clienttag.platform.Platform;
+import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -99,8 +100,8 @@ public final class NoRiskTagManager {
     /** The player's NoRisk indicator color (RGB), or null if they're not on NoRisk (or not known yet). */
     public static Integer getNoRiskColor(UUID uuid) {
         final Integer color = noRiskColors.get(uuid);
-        // PolyPlus users are most likely running this mod, which logs them into NoRisk.
-        return color == null || OneConfigCompat.isPolyPlusUser(uuid) ? null : color;
+        // ClientTag logs its users into every client, so theirs are only shown if they said they're really on it.
+        return color == null || ClientTagUsers.hides(uuid, ClientIcon.NORISK) ? null : color;
     }
 
     public static void onClientTick() {
@@ -139,7 +140,7 @@ public final class NoRiskTagManager {
     private static void addTracked(Set<UUID> tracked, UUID uuid, UUID self) {
         // Real accounts have v4 UUIDs; server-side NPCs (v2 on Hypixel) can't be NoRisk users.
         if (uuid != null && uuid.version() == 4 && !uuid.equals(self) && tracked.size() < MAX_TRACKED
-                && !OneConfigCompat.isPolyPlusUser(uuid)) {
+                && !ClientTagUsers.hides(uuid, ClientIcon.NORISK)) {
             tracked.add(uuid);
         }
     }
@@ -351,7 +352,7 @@ public final class NoRiskTagManager {
             return launcherToken;
         }
         final Platform platform = Platform.get();
-        return NoRiskApi.fetchToken(platform.sessionName(), platform::joinServer);
+        return NoRiskApi.fetchToken(platform.sessionName(), SessionJoins::join);
     }
 
     private static void scheduleRetry(long now) {

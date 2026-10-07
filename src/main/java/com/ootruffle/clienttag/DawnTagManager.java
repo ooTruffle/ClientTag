@@ -5,6 +5,7 @@ import com.ootruffle.clienttag.dawn.DawnSocket;
 import com.ootruffle.clienttag.config.ClientTagSettings;
 import com.ootruffle.clienttag.render.ClientIcon;
 import com.ootruffle.clienttag.platform.Platform;
+import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -72,8 +73,8 @@ public final class DawnTagManager {
     /** The player's Dawn logo color (RGB), or null if they're not on Dawn (or not known yet). */
     public static Integer getDawnColor(UUID uuid) {
         final Integer color = dawnColors.get(uuid);
-        // PolyPlus users are most likely running this mod, which logs them into Dawn.
-        return color == null || OneConfigCompat.isPolyPlusUser(uuid) ? null : color;
+        // ClientTag logs its users into every client, so theirs are only shown if they said they're really on it.
+        return color == null || ClientTagUsers.hides(uuid, ClientIcon.DAWN) ? null : color;
     }
 
     public static void onClientTick() {
@@ -111,7 +112,7 @@ public final class DawnTagManager {
     private static void addTracked(Set<UUID> tracked, UUID uuid, UUID self) {
         // Real accounts have v4 UUIDs; server-side NPCs (v2 on Hypixel) can't be Dawn users.
         if (uuid != null && uuid.version() == 4 && !uuid.equals(self) && tracked.size() < MAX_TRACKED
-                && !OneConfigCompat.isPolyPlusUser(uuid)) {
+                && !ClientTagUsers.hides(uuid, ClientIcon.DAWN)) {
             tracked.add(uuid);
         }
     }
@@ -299,7 +300,7 @@ public final class DawnTagManager {
 
     private static DawnAuthenticator.Token fetchToken() throws Exception {
         final Platform platform = Platform.get();
-        return DawnAuthenticator.fetchToken(platform.sessionName(), platform::joinServer);
+        return DawnAuthenticator.fetchToken(platform.sessionName(), SessionJoins::join);
     }
 
     private static void scheduleRetry(long now) {
