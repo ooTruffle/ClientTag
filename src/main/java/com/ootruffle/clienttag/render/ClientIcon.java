@@ -21,7 +21,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Every client ClientTag knows about, in left-to-right drawing order - the one place a client
+ * Every client ClientTag knows about, in their default left-to-right drawing order (users can
+ * rearrange them, see {@link ClientTagSettings#iconOrder()}) - the one place a client
  * is wired up. Adding one takes its tag manager, an entry here, its three config fields in
  * {@link com.ootruffle.clienttag.config.ClientTagConfig} (named after {@link Spec#config}), and its
  * glyph in assets/clienttag/font/icons.json (plus {@link IconArt#main} if it's drawn in code).
@@ -37,13 +38,13 @@ import java.util.function.Function;
  */
 public enum ClientIcon {
 
-    POLYPLUS(new Spec("polyplus", '')
+    POLYPLUS(new Spec("polyplus", "OneClient", '\uE000')
             .color(OneConfigCompat::getBadgeColor)
             .art(IconArt.image("/assets/clienttag/textures/polyplus_badge.png"))
             .tick(OneConfigTagManager::onClientTick)
             .config("polyPlus", "PolyPlus mod not installed")
             .runningWhen(OneConfigCompat::isInstalled)),
-    LUNAR(new Spec("lunar", '')
+    LUNAR(new Spec("lunar", "Lunar Client", '\uE001')
             .color(LunarTagManager::getLunarColor)
             .art(IconArt::crescent)
             .tick(LunarTagManager::onClientTick)
@@ -52,7 +53,7 @@ public enum ClientIcon {
             // launcher (genesis) is on the classpath of every version it runs. These names survive its obfuscation.
             .runningWhen(() -> NativeClients.anyClass("com/moonsworth/lunar/genesis/Genesis.class",
                     "com/moonsworth/lunar/ichor/api/IchorAPI.class"))),
-    DAWN(new Spec("dawn", '')
+    DAWN(new Spec("dawn", "Dawn Client", '\uE002')
             .color(DawnTagManager::getDawnColor)
             .art(IconArt::sunrise)
             .tick(DawnTagManager::onClientTick)
@@ -60,7 +61,7 @@ public enum ClientIcon {
             // Dawn is the former Feather Client and still ships Feather's entrypoint, which is the fallback.
             .runningWhen(() -> NativeClients.isDawnClient()
                     || NativeClients.anyClass("net/digitalingot/feather/FeatherMod.class"))),
-    ESSENTIAL(new Spec("essential", '')
+    ESSENTIAL(new Spec("essential", "Essential", '\uE003')
             .color(EssentialTagManager::getEssentialColor)
             .art(IconArt::sparkle)
             .tick(EssentialTagManager::onClientTick)
@@ -68,20 +69,20 @@ public enum ClientIcon {
             // Essential's loader stub registers as a mod, while the real mod is downloaded and loaded later.
             .runningWhen(() -> NativeClients.anyMod("essential", "essential-container")
                     || NativeClients.anyClass("gg/essential/Essential.class"))),
-    NORISK(new Spec("norisk", '')
+    NORISK(new Spec("norisk", "NoRiskClient", '\uE004')
             .color(NoRiskTagManager::getNoRiskColor)
             .art(IconArt::shield)
             .tick(NoRiskTagManager::onClientTick)
             .config("noRisk", "Not running on NoRiskClient")
             .runningWhen(() -> NativeClients.anyMod("nrcclient")
                     || NativeClients.anyClass("gg/norisk/client/bootstrap/ClientBootstrap.class"))),
-    LABYMOD(new Spec("labymod", '')
+    LABYMOD(new Spec("labymod", "LabyMod", '\uE005')
             .color(LabyModTagManager::getLabyModColor)
             .art(IconArt::wolf)
             .tick(LabyModTagManager::onClientTick)
             .config("labyMod", "Not running on LabyMod")
             .runningWhen(() -> NativeClients.anyMod("labymod") || NativeClients.anyClass("net/labymod/api/Laby.class"))),
-    COSMETICA(new Spec("cosmetica", '')
+    COSMETICA(new Spec("cosmetica", "Cosmetica", '\uE007')
             .color(CosmeticaTagManager::getCosmeticaColor)
             .art(IconArt.image("/assets/clienttag/textures/cosmetica_halo.png"))
             .tick(CosmeticaTagManager::onClientTick)
@@ -89,7 +90,7 @@ public enum ClientIcon {
             .runningWhen(() -> NativeClients.anyMod("cosmetica"))),
     // ClientTag is never "running natively" from its own point of view, and ClientTagUsers is
     // ticked by ClientTag itself, since it also tells the other managers who to hide.
-    CLIENTTAG(new Spec("clienttag", '')
+    CLIENTTAG(new Spec("clienttag", "ClientTag", '\uE006')
             .color(ClientTagUsers::getClientTagColor)
             .art(IconArt::nametag)
             .config("clientTag", null));
@@ -119,6 +120,7 @@ public enum ClientIcon {
     /** How a client is wired up; see the entries above. */
     private static final class Spec {
         private final String id;
+        private final String displayName;
         private final char glyph;
         private Function<UUID, Integer> colorLookup;
         private Consumer<int[]> painter;
@@ -127,8 +129,9 @@ public enum ClientIcon {
         private String configKey;
         private String notRunningLabel;
 
-        Spec(String id, char glyph) {
+        Spec(String id, String displayName, char glyph) {
             this.id = id;
+            this.displayName = displayName;
             this.glyph = glyph;
         }
 
@@ -169,15 +172,17 @@ public enum ClientIcon {
 
     static {
         final Set<String> ids = new HashSet<>();
+        final Set<String> names = new HashSet<>();
         final Set<Character> glyphs = new HashSet<>();
         for (ClientIcon icon : values()) {
-            if (!ids.add(icon.id) || !glyphs.add(icon.glyph)) {
-                throw new IllegalStateException("Duplicate client id or glyph: " + icon);
+            if (!ids.add(icon.id) || !names.add(icon.displayName) || !glyphs.add(icon.glyph)) {
+                throw new IllegalStateException("Duplicate client id, name or glyph: " + icon);
             }
         }
     }
 
     private final String id;
+    private final String displayName;
     private final char glyph;
     private final Function<UUID, Integer> colorLookup;
     private final Consumer<int[]> painter;
@@ -188,6 +193,7 @@ public enum ClientIcon {
 
     ClientIcon(Spec spec) {
         this.id = spec.id;
+        this.displayName = spec.displayName;
         this.glyph = spec.glyph;
         this.colorLookup = spec.colorLookup;
         this.painter = spec.painter;
@@ -197,13 +203,13 @@ public enum ClientIcon {
         this.notRunningLabel = spec.notRunningLabel;
     }
 
-    /** Every enabled icon the player should get, in drawing order; empty if they're on none of the clients. */
+    /** Every enabled icon the player should get, in the user's drawing order; empty if they're on none of the clients. */
     public static List<Tinted> iconsFor(UUID uuid) {
         final List<Tinted> icons = new ArrayList<>(values().length);
         if (uuid == null) {
             return icons;
         }
-        for (ClientIcon icon : values()) {
+        for (ClientIcon icon : ClientTagSettings.iconOrder()) {
             if (!ClientTagSettings.isEnabled(icon)) {
                 continue;
             }
@@ -213,6 +219,16 @@ public enum ClientIcon {
             }
         }
         return icons;
+    }
+
+    /** The icon with this {@link #displayName()}, or null. */
+    public static ClientIcon byDisplayName(String displayName) {
+        for (ClientIcon icon : values()) {
+            if (icon.displayName.equals(displayName)) {
+                return icon;
+            }
+        }
+        return null;
     }
 
     /** The icon with this {@link #id()}, or null. */
@@ -228,6 +244,11 @@ public enum ClientIcon {
     /** Short lowercase name, e.g. "lunar". Sent to the ClientTag server, so it must never change. */
     public String id() {
         return id;
+    }
+
+    /** The client's name as players know it, e.g. "Lunar Client". Shown in, and saved by, the icon order setting. */
+    public String displayName() {
+        return displayName;
     }
 
     /**
