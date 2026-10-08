@@ -2,6 +2,7 @@ package com.ootruffle.clienttag;
 
 import com.ootruffle.clienttag.render.ClientIcon;
 import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
 import org.apache.logging.log4j.LogManager;
@@ -44,7 +45,9 @@ public final class NativeClients {
         if (anyClass("com/moonsworth/lunar/genesis/Genesis.class", "com/moonsworth/lunar/ichor/api/IchorAPI.class")) {
             found.add(ClientIcon.LUNAR);
         }
-        if (anyMod("dawnclient", "dawn-client")) {
+        // Dawn's mod ID is just "dawn", so its metadata has to say it's Dawn Client too. Dawn is the
+        // former Feather Client and still ships Feather's entrypoint, which is the fallback.
+        if (isDawnClient() || anyClass("net/digitalingot/feather/FeatherMod.class")) {
             found.add(ClientIcon.DAWN);
         }
         // Essential's loader stub registers as a mod, while the real mod is downloaded and loaded later.
@@ -64,6 +67,13 @@ public final class NativeClients {
             LogManager.getLogger("ClientTag").info("Running alongside {} - leaving their indicators to them", found);
         }
         return found;
+    }
+
+    private static boolean isDawnClient() {
+        return FabricLoader.getInstance().getModContainer("dawn")
+                .map(mod -> mod.getMetadata().getName().toLowerCase(Locale.ROOT).startsWith("dawn client")
+                        || mod.getMetadata().getContact().get("homepage").map(url -> url.contains("dawn.gg")).orElse(false))
+                .orElse(false);
     }
 
     private static boolean anyMod(String... ids) {
