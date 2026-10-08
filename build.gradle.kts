@@ -147,7 +147,7 @@ tasks {
 
         inputs.properties(props)
 
-        filesMatching(listOf("fabric.mod.json", "mixins.$modId.json", "mixins.$modId.polyplus.json")) {
+        filesMatching(listOf("fabric.mod.json", "mixins.$modId.json", "mixins.$modId.polyplus.json", "mixins.$modId.argentum.json")) {
             expand(props)
         }
 
