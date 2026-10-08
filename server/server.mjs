@@ -43,7 +43,7 @@ const MAX_BODY = 64 * 1024;
 const MAX_LOOKUP = 512;
 const LOG_SIZE = 2000;
 const MAX_AGENTS = 5000;
-const CLIENT_IDS = new Set(["polyplus", "lunar", "dawn", "essential", "norisk", "labymod"]);
+const CLIENT_IDS = new Set(["polyplus", "lunar", "dawn", "essential", "norisk", "labymod", "cosmetica"]);
 const DEFAULT_TAG_COLOR = 0xffffff;
 
 // token -> { uuid, expires }

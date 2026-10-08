@@ -7,6 +7,7 @@
     {"type": "bitmap", "file": "clienttag:font/norisk.png", "ascent": 7, "height": 8, "chars": [""]},
     {"type": "bitmap", "file": "clienttag:font/labymod.png", "ascent": 7, "height": 8, "chars": [""]},
     {"type": "bitmap", "file": "clienttag:font/clienttag.png", "ascent": 7, "height": 8, "chars": [""]},
+    {"type": "bitmap", "file": "clienttag:cosmetica_halo.png", "ascent": 7, "height": 8, "chars": [""]},
     {"type": "space", "advances": {"": 2}}
   ]
 }
