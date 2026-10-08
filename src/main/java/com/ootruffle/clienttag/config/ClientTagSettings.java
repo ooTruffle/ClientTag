@@ -2,6 +2,9 @@ package com.ootruffle.clienttag.config;
 
 import com.ootruffle.clienttag.NativeClients;
 import com.ootruffle.clienttag.render.ClientIcon;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import net.fabricmc.loader.api.FabricLoader;
 import org.polyfrost.oneconfig.api.commands.v1.CommandManager;
 import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
@@ -18,6 +21,7 @@ import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
 public final class ClientTagSettings {
 
     private static final boolean LOADED = FabricLoader.getInstance().isModLoaded("oneconfigv1");
+    private static final List<ClientIcon> DEFAULT_ORDER = Collections.unmodifiableList(Arrays.asList(ClientIcon.values()));
 
     private ClientTagSettings() {}
 
@@ -46,6 +50,11 @@ public final class ClientTagSettings {
         return !LOADED || Present.showOwnTag();
     }
 
+    /** Every client, in the order their icons are drawn, left to right. */
+    public static List<ClientIcon> iconOrder() {
+        return LOADED ? Present.iconOrder() : DEFAULT_ORDER;
+    }
+
     public static boolean isEnabled(ClientIcon icon) {
         // A client we're running on draws its own indicators.
         if (NativeClients.isRunning(icon)) {
@@ -66,6 +75,7 @@ public final class ClientTagSettings {
 
         static void init() {
             config().preload();
+            config().normalizeIconOrder();
             CommandManager.INSTANCE.register(ScreensKt.addDefaultCommand(config(), "clienttag"));
         }
 
@@ -83,6 +93,10 @@ public final class ClientTagSettings {
 
         static boolean showOwnTag() {
             return config().showOwnTag;
+        }
+
+        static List<ClientIcon> iconOrder() {
+            return config().iconOrder();
         }
 
         static boolean isEnabled(ClientIcon icon) {
