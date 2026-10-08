@@ -70,6 +70,13 @@ public final class ClientTagConfig extends Config {
     @Color(title = "Color", category = "LabyMod", alpha = false)
     public PolyColor labyModColor = new PolyColor(0xFFD8D8D8);
 
+    @Switch(title = "Show Cosmetica", category = "Cosmetica")
+    public boolean cosmeticaEnabled = true;
+    @Switch(title = "Custom Color", description = "Tint the Cosmetica halo.", category = "Cosmetica")
+    public boolean cosmeticaCustomColor = false;
+    @Color(title = "Color", category = "Cosmetica", alpha = false)
+    public PolyColor cosmeticaColor = new PolyColor(0xFFFFFFFF);
+
     @Switch(title = "Show ClientTag", description = "For ClientTag users who chose to show it, or aren't on any other client. Needs the ClientTag server.", category = "ClientTag")
     public boolean clientTagEnabled = true;
     @Switch(title = "Custom Color", description = "Use one color for everyone instead of the color the ClientTag server gives each player.", category = "ClientTag")
@@ -96,6 +103,7 @@ public final class ClientTagConfig extends Config {
         hideIf("essentialColor", () -> !essentialCustomColor);
         hideIf("noRiskColor", () -> !noRiskCustomColor);
         hideIf("labyModColor", () -> !labyModCustomColor);
+        hideIf("cosmeticaColor", () -> !cosmeticaCustomColor);
         hideIf("clientTagColor", () -> !clientTagCustomColor);
         hideIf("showOwnTag", () -> !useServer);
         hideIf("polyPlusColor", () -> !polyPlusCustomColor || NativeClients.isRunning(ClientIcon.POLYPLUS));
@@ -105,6 +113,7 @@ public final class ClientTagConfig extends Config {
         notOn(ClientIcon.ESSENTIAL, "Essential not installed", "essentialEnabled", "essentialCustomColor", "essentialColor");
         notOn(ClientIcon.NORISK, "Not running on NoRiskClient", "noRiskEnabled", "noRiskCustomColor", "noRiskColor");
         notOn(ClientIcon.LABYMOD, "Not running on LabyMod", "labyModEnabled", "labyModCustomColor", "labyModColor");
+        notOn(ClientIcon.COSMETICA, "Cosmetica not installed", "cosmeticaEnabled", "cosmeticaCustomColor", "cosmeticaColor");
         notOn(ClientIcon.POLYPLUS, "PolyPlus mod not installed", "polyPlusEnabled", "polyPlusCustomColor");
     }
 

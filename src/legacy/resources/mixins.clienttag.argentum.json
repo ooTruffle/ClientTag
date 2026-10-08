@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "package": "${base_group}.legacy.compat.mixins",
+  "plugin": "${base_group}.legacy.compat.ArgentumMixinPlugin",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "client": [
+    "TextBatcherMixin"
+  ]
+}
