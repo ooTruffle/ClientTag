@@ -6,12 +6,19 @@ import org.polyfrost.compose.render.PolyColor;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.polyfrost.oneconfig.api.config.v1.Config;
 import org.polyfrost.oneconfig.api.config.v1.ConfigManager;
 import org.polyfrost.oneconfig.api.config.v1.Property;
 import org.polyfrost.oneconfig.api.config.v1.annotations.Color;
+import org.polyfrost.oneconfig.api.config.v1.annotations.DraggableList;
 import org.polyfrost.oneconfig.api.config.v1.annotations.Switch;
 
 /**
@@ -34,6 +41,9 @@ public final class ClientTagConfig extends Config {
 
     @Switch(title = "Show in Tab List", subcategory = "Display")
     public boolean showInTab = true;
+
+    @DraggableList(title = "Icon Order", description = "Drag clients into the order their icons are drawn in, left to right.", subcategory = "Display")
+    public String[] iconOrder = IconOrder.names(IconOrder.resolve(null));
 
     @Switch(title = "Use ClientTag Server", description = "Share which client you're really on with other ClientTag users, and learn theirs, so only real tags are shown. Anyone can look players up on this server.", subcategory = "ClientTag Server")
     public boolean useServer = true;
@@ -118,6 +128,23 @@ public final class ClientTagConfig extends Config {
         }
     }
 
+    /**
+     * Puts every client in the saved icon order exactly once: clients added since it was saved
+     * go at the end, and names that no longer match a client are dropped. Call after loading.
+     */
+    void normalizeIconOrder() {
+        final String[] names = IconOrder.names(IconOrder.resolve(iconOrder));
+        if (!Arrays.equals(names, iconOrder)) {
+            getProperty("iconOrder").setAs(names);
+            save();
+        }
+    }
+
+    /** Every client, in the order the user wants their icons drawn. */
+    public List<ClientIcon> iconOrder() {
+        return IconOrder.of(iconOrder);
+    }
+
     /** Whether the user wants this client's icon shown. */
     public boolean isEnabled(ClientIcon icon) {
         return Options.of(icon).enabled(this);
@@ -129,6 +156,45 @@ public final class ClientTagConfig extends Config {
         final PolyColor color = options.customColor(this) ? options.color(this) : null;
         // getArgb() follows chroma, so a chroma color animates.
         return color != null ? color.getArgb() & 0xFFFFFF : reportedColor;
+    }
+
+    /** Turns the saved icon order into clients, cached until it changes. Kept out of the config class so OneConfig never sees it. */
+    private static final class IconOrder {
+        // Render thread only.
+        private static String[] source;
+        private static List<ClientIcon> order;
+
+        static List<ClientIcon> of(String[] names) {
+            // OneConfig may edit the array in place, so compare against a copy rather than by reference.
+            if (order == null || !Arrays.equals(names, source)) {
+                source = names == null ? null : names.clone();
+                order = resolve(names);
+            }
+            return order;
+        }
+
+        /** The clients named, in order, followed by any left out in their default order. */
+        static List<ClientIcon> resolve(String[] names) {
+            final Set<ClientIcon> icons = new LinkedHashSet<>();
+            if (names != null) {
+                for (String name : names) {
+                    final ClientIcon icon = ClientIcon.byDisplayName(name);
+                    if (icon != null) {
+                        icons.add(icon);
+                    }
+                }
+            }
+            icons.addAll(Arrays.asList(ClientIcon.values()));
+            return Collections.unmodifiableList(new ArrayList<>(icons));
+        }
+
+        static String[] names(List<ClientIcon> icons) {
+            final String[] names = new String[icons.size()];
+            for (int i = 0; i < names.length; i++) {
+                names[i] = icons.get(i).displayName();
+            }
+            return names;
+        }
     }
 
     /**
