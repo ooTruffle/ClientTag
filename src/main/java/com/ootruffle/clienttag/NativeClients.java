@@ -12,7 +12,8 @@ import org.apache.logging.log4j.LogManager;
  * That client then draws its own indicators, and a second connection with the same account
  * could knock its own one off - so ClientTag leaves that client alone entirely.
  * <p>
- * Each client is recognised by its Fabric mod IDs or by a class only it ships. The result is
+ * Each client is recognised by its Fabric mod IDs or by a class only it ships (each
+ * {@link ClientIcon} says which, using the helpers here). The result is
  * kept from the first client tick on, by which point Essential's loader stub has loaded the
  * real mod if it's going to; anything asking earlier gets a fresh, uncached look.
  */
@@ -37,31 +38,10 @@ public final class NativeClients {
 
     private static Set<ClientIcon> detect(boolean log) {
         final Set<ClientIcon> found = EnumSet.noneOf(ClientIcon.class);
-        if (OneConfigCompat.isInstalled()) {
-            found.add(ClientIcon.POLYPLUS);
-        }
-        // Lunar loads mods through its own Ichor loader without registering a mod ID, but its
-        // launcher (genesis) is on the classpath of every version it runs. These names survive its obfuscation.
-        if (anyClass("com/moonsworth/lunar/genesis/Genesis.class", "com/moonsworth/lunar/ichor/api/IchorAPI.class")) {
-            found.add(ClientIcon.LUNAR);
-        }
-        // Dawn's mod ID is just "dawn", so its metadata has to say it's Dawn Client too. Dawn is the
-        // former Feather Client and still ships Feather's entrypoint, which is the fallback.
-        if (isDawnClient() || anyClass("net/digitalingot/feather/FeatherMod.class")) {
-            found.add(ClientIcon.DAWN);
-        }
-        // Essential's loader stub registers as a mod, while the real mod is downloaded and loaded later.
-        if (anyMod("essential", "essential-container") || anyClass("gg/essential/Essential.class")) {
-            found.add(ClientIcon.ESSENTIAL);
-        }
-        if (anyMod("nrcclient") || anyClass("gg/norisk/client/bootstrap/ClientBootstrap.class")) {
-            found.add(ClientIcon.NORISK);
-        }
-        if (anyMod("labymod") || anyClass("net/labymod/api/Laby.class")) {
-            found.add(ClientIcon.LABYMOD);
-        }
-        if (anyMod("cosmetica")) {
-            found.add(ClientIcon.COSMETICA);
+        for (ClientIcon icon : ClientIcon.values()) {
+            if (icon.detectRunning()) {
+                found.add(icon);
+            }
         }
         if (log && !found.isEmpty()) {
             LogManager.getLogger("ClientTag").info("Running alongside {} - leaving their indicators to them", found);
@@ -69,14 +49,16 @@ public final class NativeClients {
         return found;
     }
 
-    private static boolean isDawnClient() {
+    /** Dawn's mod ID is just "dawn", so its metadata has to say it's Dawn Client too. */
+    public static boolean isDawnClient() {
         return FabricLoader.getInstance().getModContainer("dawn")
                 .map(mod -> mod.getMetadata().getName().toLowerCase(Locale.ROOT).startsWith("dawn client")
                         || mod.getMetadata().getContact().get("homepage").map(url -> url.contains("dawn.gg")).orElse(false))
                 .orElse(false);
     }
 
-    private static boolean anyMod(String... ids) {
+    /** Whether any of these Fabric mods is loaded. */
+    public static boolean anyMod(String... ids) {
         for (String id : ids) {
             if (FabricLoader.getInstance().isModLoaded(id)) {
                 return true;
@@ -85,7 +67,8 @@ public final class NativeClients {
         return false;
     }
 
-    private static boolean anyClass(String... resources) {
+    /** Whether any of these class files is on our or the system classpath. */
+    public static boolean anyClass(String... resources) {
         final ClassLoader ours = NativeClients.class.getClassLoader();
         final ClassLoader system = ClassLoader.getSystemClassLoader();
         for (String resource : resources) {

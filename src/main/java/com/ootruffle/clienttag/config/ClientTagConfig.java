@@ -3,8 +3,11 @@ package com.ootruffle.clienttag.config;
 import com.ootruffle.clienttag.NativeClients;
 import com.ootruffle.clienttag.render.ClientIcon;
 import org.polyfrost.compose.render.PolyColor;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumMap;
+import java.util.Map;
 import org.polyfrost.oneconfig.api.config.v1.Config;
 import org.polyfrost.oneconfig.api.config.v1.ConfigManager;
 import org.polyfrost.oneconfig.api.config.v1.Property;
@@ -18,6 +21,9 @@ import org.polyfrost.oneconfig.api.config.v1.annotations.Switch;
  * Display options are on the General tab. Each client has its own tab, where it can be
  * hidden, or have its icon drawn in one fixed color instead of the color its client
  * reports for each player.
+ * <p>
+ * Every {@link ClientIcon} needs {@code <key>Enabled}, {@code <key>CustomColor} and
+ * {@code <key>Color} fields here, named after its {@link ClientIcon#configKey()}.
  */
 public final class ClientTagConfig extends Config {
 
@@ -98,29 +104,82 @@ public final class ClientTagConfig extends Config {
         if (!Files.exists(folder.resolve("clienttag.json")) && Files.exists(folder.resolve("lunertag.json"))) {
             loadFrom(folder.resolve("lunertag.json"));
         }
-        hideIf("lunarColor", () -> !lunarCustomColor);
-        hideIf("dawnColor", () -> !dawnCustomColor);
-        hideIf("essentialColor", () -> !essentialCustomColor);
-        hideIf("noRiskColor", () -> !noRiskCustomColor);
-        hideIf("labyModColor", () -> !labyModCustomColor);
-        hideIf("cosmeticaColor", () -> !cosmeticaCustomColor);
-        hideIf("clientTagColor", () -> !clientTagCustomColor);
         hideIf("showOwnTag", () -> !useServer);
-        hideIf("polyPlusColor", () -> !polyPlusCustomColor || NativeClients.isRunning(ClientIcon.POLYPLUS));
-        // A client we're running on draws its own indicators, so its options here don't apply.
-        notOn(ClientIcon.LUNAR, "Not running on Lunar Client", "lunarEnabled", "lunarCustomColor", "lunarColor");
-        notOn(ClientIcon.DAWN, "Not running on Dawn Client", "dawnEnabled", "dawnCustomColor", "dawnColor");
-        notOn(ClientIcon.ESSENTIAL, "Essential not installed", "essentialEnabled", "essentialCustomColor", "essentialColor");
-        notOn(ClientIcon.NORISK, "Not running on NoRiskClient", "noRiskEnabled", "noRiskCustomColor", "noRiskColor");
-        notOn(ClientIcon.LABYMOD, "Not running on LabyMod", "labyModEnabled", "labyModCustomColor", "labyModColor");
-        notOn(ClientIcon.COSMETICA, "Cosmetica not installed", "cosmeticaEnabled", "cosmeticaCustomColor", "cosmeticaColor");
-        notOn(ClientIcon.POLYPLUS, "PolyPlus mod not installed", "polyPlusEnabled", "polyPlusCustomColor");
+        for (ClientIcon icon : ClientIcon.values()) {
+            final String key = icon.configKey();
+            hideIf(key + "Color", () -> !Options.of(icon).customColor(this));
+            // A client we're running on draws its own indicators, so its options here don't apply.
+            if (icon.notRunningLabel() != null) {
+                for (String option : new String[] {key + "Enabled", key + "CustomColor", key + "Color"}) {
+                    addDependency(option, icon.notRunningLabel(),
+                            () -> NativeClients.isRunning(icon) ? Property.Display.DISABLED : Property.Display.SHOWN);
+                }
+            }
+        }
     }
 
-    private void notOn(ClientIcon icon, String condition, String... options) {
-        for (String option : options) {
-            addDependency(option, condition,
-                    () -> NativeClients.isRunning(icon) ? Property.Display.DISABLED : Property.Display.SHOWN);
+    /** Whether the user wants this client's icon shown. */
+    public boolean isEnabled(ClientIcon icon) {
+        return Options.of(icon).enabled(this);
+    }
+
+    /** The RGB color to draw the icon in, given the color its client reported for the player. */
+    public int color(ClientIcon icon, int reportedColor) {
+        final Options options = Options.of(icon);
+        final PolyColor color = options.customColor(this) ? options.color(this) : null;
+        // getArgb() follows chroma, so a chroma color animates.
+        return color != null ? color.getArgb() & 0xFFFFFF : reportedColor;
+    }
+
+    /**
+     * A client's three option fields, found by {@link ClientIcon#configKey()}. Kept out of the
+     * config class itself so OneConfig never sees it.
+     */
+    private static final class Options {
+        private static final Map<ClientIcon, Options> ALL = new EnumMap<>(ClientIcon.class);
+
+        static {
+            for (ClientIcon icon : ClientIcon.values()) {
+                ALL.put(icon, new Options(icon.configKey()));
+            }
+        }
+
+        private final Field enabled;
+        private final Field customColor;
+        private final Field color;
+
+        private Options(String key) {
+            try {
+                enabled = ClientTagConfig.class.getField(key + "Enabled");
+                customColor = ClientTagConfig.class.getField(key + "CustomColor");
+                color = ClientTagConfig.class.getField(key + "Color");
+            } catch (NoSuchFieldException e) {
+                throw new IllegalStateException("ClientTagConfig is missing an option for \"" + key + "\"", e);
+            }
+        }
+
+        static Options of(ClientIcon icon) {
+            return ALL.get(icon);
+        }
+
+        boolean enabled(ClientTagConfig config) {
+            return get(enabled, config, Boolean.class);
+        }
+
+        boolean customColor(ClientTagConfig config) {
+            return get(customColor, config, Boolean.class);
+        }
+
+        PolyColor color(ClientTagConfig config) {
+            return get(color, config, PolyColor.class);
+        }
+
+        private static <T> T get(Field field, ClientTagConfig config, Class<T> type) {
+            try {
+                return type.cast(field.get(config));
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException(e);
+            }
         }
     }
 

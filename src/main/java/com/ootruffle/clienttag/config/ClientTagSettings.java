@@ -3,7 +3,6 @@ package com.ootruffle.clienttag.config;
 import com.ootruffle.clienttag.NativeClients;
 import com.ootruffle.clienttag.render.ClientIcon;
 import net.fabricmc.loader.api.FabricLoader;
-import org.polyfrost.compose.render.PolyColor;
 import org.polyfrost.oneconfig.api.commands.v1.CommandManager;
 import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
 
@@ -87,38 +86,11 @@ public final class ClientTagSettings {
         }
 
         static boolean isEnabled(ClientIcon icon) {
-            final ClientTagConfig c = config();
-            switch (icon) {
-                case POLYPLUS: return c.polyPlusEnabled;
-                case LUNAR: return c.lunarEnabled;
-                case DAWN: return c.dawnEnabled;
-                case ESSENTIAL: return c.essentialEnabled;
-                case NORISK: return c.noRiskEnabled;
-                case LABYMOD: return c.labyModEnabled;
-                case CLIENTTAG: return c.clientTagEnabled;
-                case COSMETICA: return c.cosmeticaEnabled;
-                default: return true;
-            }
+            return config().isEnabled(icon);
         }
 
         static int color(ClientIcon icon, int reportedColor) {
-            final ClientTagConfig c = config();
-            switch (icon) {
-                case POLYPLUS: return custom(c.polyPlusCustomColor, c.polyPlusColor, reportedColor);
-                case LUNAR: return custom(c.lunarCustomColor, c.lunarColor, reportedColor);
-                case DAWN: return custom(c.dawnCustomColor, c.dawnColor, reportedColor);
-                case ESSENTIAL: return custom(c.essentialCustomColor, c.essentialColor, reportedColor);
-                case NORISK: return custom(c.noRiskCustomColor, c.noRiskColor, reportedColor);
-                case LABYMOD: return custom(c.labyModCustomColor, c.labyModColor, reportedColor);
-                case CLIENTTAG: return custom(c.clientTagCustomColor, c.clientTagColor, reportedColor);
-                case COSMETICA: return custom(c.cosmeticaCustomColor, c.cosmeticaColor, reportedColor);
-                default: return reportedColor;
-            }
-        }
-
-        private static int custom(boolean enabled, PolyColor color, int reportedColor) {
-            // getArgb() follows chroma, so a chroma color animates.
-            return enabled && color != null ? color.getArgb() & 0xFFFFFF : reportedColor;
+            return config().color(icon, reportedColor);
         }
     }
 

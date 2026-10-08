@@ -40,26 +40,10 @@ public final class ClientTag {
         }
         ClientTagUsers.onClientTick();
         // A client we're running on draws its own indicators, and a second connection could disrupt its own.
-        if (!NativeClients.isRunning(ClientIcon.LUNAR)) {
-            LunarTagManager.onClientTick();
-        }
-        if (!NativeClients.isRunning(ClientIcon.DAWN)) {
-            DawnTagManager.onClientTick();
-        }
-        if (!NativeClients.isRunning(ClientIcon.NORISK)) {
-            NoRiskTagManager.onClientTick();
-        }
-        if (!NativeClients.isRunning(ClientIcon.ESSENTIAL)) {
-            EssentialTagManager.onClientTick();
-        }
-        if (!NativeClients.isRunning(ClientIcon.LABYMOD)) {
-            LabyModTagManager.onClientTick();
-        }
-        if (!NativeClients.isRunning(ClientIcon.POLYPLUS)) {
-            OneConfigTagManager.onClientTick();
-        }
-        if (!NativeClients.isRunning(ClientIcon.COSMETICA)) {
-            CosmeticaTagManager.onClientTick();
+        for (ClientIcon icon : ClientIcon.values()) {
+            if (!NativeClients.isRunning(icon)) {
+                icon.tick();
+            }
         }
     }
 
