@@ -1,5 +1,6 @@
 package com.ootruffle.clienttag.platform;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -17,6 +18,35 @@ public interface Platform {
     @FunctionalInterface
     interface PlayerVisitor {
         void visit(UUID uuid, String textures);
+    }
+
+    /** Receives a player's UUID and name. */
+    @FunctionalInterface
+    interface NamedPlayerVisitor {
+        void visit(UUID uuid, String name);
+    }
+
+    /** A piece of a chat message, in one color. */
+    final class ChatPart {
+        /** Use the chat's default color. */
+        public static final int DEFAULT = -1;
+
+        private final String text;
+        private final int color;
+
+        public ChatPart(String text, int color) {
+            this.text = text;
+            this.color = color;
+        }
+
+        public String text() {
+            return text;
+        }
+
+        /** RGB, or {@link #DEFAULT}. */
+        public int color() {
+            return color;
+        }
     }
 
     static Platform get() {
@@ -42,6 +72,12 @@ public interface Platform {
 
     /** Every entry in the tab list, if there is one. */
     void forEachTabListPlayer(PlayerVisitor visitor);
+
+    /** Every player in the tab list and then the loaded world (if any), by name; players in both are visited twice. */
+    void forEachPlayerName(NamedPlayerVisitor visitor);
+
+    /** Shows a message in our own chat only, as one line. 1.8.9 rounds each color to the nearest chat color. */
+    void showMessage(List<ChatPart> parts);
 
     /** The logged-in account's UUID. */
     UUID sessionId();

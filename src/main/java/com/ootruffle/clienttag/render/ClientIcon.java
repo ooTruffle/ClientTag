@@ -213,12 +213,20 @@ public enum ClientIcon {
             if (!ClientTagSettings.isEnabled(icon)) {
                 continue;
             }
-            final Integer color = icon.colorLookup.apply(uuid);
+            final Integer color = icon.reportedColor(uuid);
             if (color != null) {
                 icons.add(new Tinted(icon, ClientTagSettings.color(icon, color)));
             }
         }
         return icons;
+    }
+
+    /**
+     * The player's indicator color (RGB) as their client reported it, or null if they're not
+     * known to be on it. Ignores the settings - see {@link #iconsFor} for what's drawn.
+     */
+    public Integer reportedColor(UUID uuid) {
+        return colorLookup.apply(uuid);
     }
 
     /** The icon with this {@link #displayName()}, or null. */

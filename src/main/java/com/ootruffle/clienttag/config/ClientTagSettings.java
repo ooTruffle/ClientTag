@@ -1,16 +1,22 @@
 package com.ootruffle.clienttag.config;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.ootruffle.clienttag.NativeClients;
+import com.ootruffle.clienttag.WhoCommand;
 import com.ootruffle.clienttag.render.ClientIcon;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import net.fabricmc.loader.api.FabricLoader;
 import org.polyfrost.oneconfig.api.commands.v1.CommandManager;
 import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
 
 /**
- * The mod's settings, editable through OneConfig when it's installed (also via /clienttag).
+ * The mod's settings, editable through OneConfig when it's installed (also via /clienttag,
+ * which also has {@code /clienttag who <player>}).
  * Without OneConfig every client is shown everywhere in its reported color.
  * <p>
  * A client is always off while the game is running on it (see {@link NativeClients}) - it
@@ -76,7 +82,29 @@ public final class ClientTagSettings {
         static void init() {
             config().preload();
             config().normalizeIconOrder();
-            CommandManager.INSTANCE.register(ScreensKt.addDefaultCommand(config(), "clienttag"));
+            CommandManager.INSTANCE.register(withWho(ScreensKt.addDefaultCommand(config(), "clienttag")));
+        }
+
+        /**
+         * Adds {@code who <player>} (see {@link WhoCommand}) to /clienttag. Generic because
+         * the command source type differs between Minecraft versions.
+         */
+        private static <S> LiteralArgumentBuilder<S> withWho(LiteralArgumentBuilder<S> root) {
+            return root.then(LiteralArgumentBuilder.<S>literal("who")
+                    .then(RequiredArgumentBuilder.<S, String>argument("player", StringArgumentType.word())
+                            .suggests((context, builder) -> {
+                                final String typed = builder.getRemaining().toLowerCase(Locale.ROOT);
+                                for (String name : WhoCommand.playerNames()) {
+                                    if (name.toLowerCase(Locale.ROOT).startsWith(typed)) {
+                                        builder.suggest(name);
+                                    }
+                                }
+                                return builder.buildFuture();
+                            })
+                            .executes(context -> {
+                                WhoCommand.run(StringArgumentType.getString(context, "player"));
+                                return 1;
+                            })));
         }
 
         static boolean showOnNametags() {
