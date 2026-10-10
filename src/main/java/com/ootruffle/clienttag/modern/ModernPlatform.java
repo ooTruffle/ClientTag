@@ -3,6 +3,7 @@ package com.ootruffle.clienttag.modern;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.ootruffle.clienttag.platform.Platform;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
@@ -14,6 +15,7 @@ import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 
 /** {@link Platform} for the Fabric versions, in Mojang names. */
 final class ModernPlatform implements Platform {
@@ -80,6 +82,54 @@ final class ModernPlatform implements Platform {
             break;
         }
         visitor.visit(uuid, value);
+    }
+
+    @Override
+    public void forEachPlayerName(NamedPlayerVisitor visitor) {
+        final Minecraft mc = Minecraft.getInstance();
+        final ClientPacketListener connection = mc.getConnection();
+        if (connection != null) {
+            for (PlayerInfo info : connection.getOnlinePlayers()) {
+                visitName(visitor, info.getProfile());
+            }
+        }
+        if (mc.level != null) {
+            for (AbstractClientPlayer player : mc.level.players()) {
+                visitName(visitor, player.getGameProfile());
+            }
+        }
+    }
+
+    private static void visitName(NamedPlayerVisitor visitor, GameProfile profile) {
+        if (profile == null) {
+            return;
+        }
+        //? if >= 1.21.10 {
+        final UUID uuid = profile.id();
+        final String name = profile.name();
+        //?} else {
+        /*final UUID uuid = profile.getId();
+        final String name = profile.getName();
+        *///?}
+        if (uuid != null && name != null) {
+            visitor.visit(uuid, name);
+        }
+    }
+
+    @Override
+    public void showMessage(List<ChatPart> parts) {
+        final MutableComponent line = Component.empty();
+        for (ChatPart part : parts) {
+            final MutableComponent text = Component.literal(part.text());
+            line.append(part.color() == ChatPart.DEFAULT ? text : text.withColor(part.color()));
+        }
+        // The chat moved into Gui's Hud in 26.2, and 26.1 split client and server system messages.
+        //? if >= 26.2 {
+        Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(line);
+        //?} elif >= 26.1 {
+        /*Minecraft.getInstance().gui.getChat().addClientSystemMessage(line);
+        *///?} else
+        /*Minecraft.getInstance().gui.getChat().addMessage(line);*/
     }
 
     @Override
