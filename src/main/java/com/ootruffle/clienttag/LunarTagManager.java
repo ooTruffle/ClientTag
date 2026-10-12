@@ -119,6 +119,10 @@ public final class LunarTagManager {
 
     private static void changeServer(String address) {
         generation++;
+        // The real client unsubscribes from everyone it was watching on the old server.
+        if (socket != null && socket.isOpen()) {
+            subscribed.forEach(socket::unsubscribe);
+        }
         subscribed.clear();
         lunarColors.clear();
         locationReported = false;

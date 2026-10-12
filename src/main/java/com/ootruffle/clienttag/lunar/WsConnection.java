@@ -53,7 +53,15 @@ final class WsConnection implements WebSocket.Listener {
 
     /** JDK WebSockets reject overlapping sends, so each send waits for the previous one. */
     synchronized void send(byte[] message) {
-        sendChain = sendChain.thenCompose(w -> w.sendBinary(ByteBuffer.wrap(message), true));
+        sendChain = sendChain.thenCompose(w -> w.sendBinary(ByteBuffer.wrap(message), true)).whenComplete(this::checkSent);
+    }
+
+    /** A failed send fails every send after it too, so drop the connection and let the caller reconnect. */
+    private void checkSent(WebSocket w, Throwable error) {
+        if (error != null) {
+            markClosed("send failed: " + error);
+            ws.abort();
+        }
     }
 
     byte[] nextMessage(long timeoutMs) throws IOException, InterruptedException {
