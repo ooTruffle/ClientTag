@@ -15,7 +15,7 @@ import org.polyfrost.oneconfig.api.commands.v1.CommandManager;
 import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
 
 /**
- * The mod's settings, editable through OneConfig when it's installed (also via /clienttag,
+ * The mod's settings, editable through OneConfig when it's installed (also via /clienttag or /ct,
  * which also has {@code who <player>} and the {@code flag}, {@code unflag} and {@code flags} commands).
  * Without OneConfig every client is shown everywhere in its reported color, and there are no
  * commands (config/clienttag/flags.json can still be edited by hand).
@@ -88,7 +88,10 @@ public final class ClientTagSettings {
         static void init() {
             config().preload();
             config().normalizeIconOrder();
-            CommandManager.INSTANCE.register(FlagCommands.addTo(withWho(ScreensKt.addDefaultCommand(config(), "clienttag"))));
+            // /ct is short for /clienttag. Each gets the whole tree: a redirect wouldn't run bare /ct.
+            for (String name : new String[] {"clienttag", "ct"}) {
+                CommandManager.INSTANCE.register(FlagCommands.addTo(withWho(ScreensKt.addDefaultCommand(config(), name))));
+            }
         }
 
         /**
