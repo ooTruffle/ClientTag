@@ -41,6 +41,7 @@ public final class IconArt {
         icons.put("norisk", IconArt::shield);
         icons.put("labymod", IconArt::wolf);
         icons.put("clienttag", IconArt::nametag);
+        icons.put("flagged", IconArt::warning);
 
         final File dir = new File(args[0]);
         if (!dir.isDirectory() && !dir.mkdirs()) {
@@ -141,6 +142,14 @@ public final class IconArt {
         final double[] xs = {0.04, 0.30, 0.96, 0.96, 0.30};
         final double[] ys = {0.50, 0.20, 0.20, 0.80, 0.80};
         paint(pixels, (x, y) -> inPolygon(x, y, xs, ys) && !inDisc(x, y, 0.27, 0.50, 0.08));
+    }
+
+    /** A warning sign: a triangle standing on its base, with an exclamation mark cut out. */
+    static void warning(int[] pixels) {
+        final double[] xs = {0.50, 0.98, 0.02};
+        final double[] ys = {0.04, 0.92, 0.92};
+        paint(pixels, (x, y) -> inPolygon(x, y, xs, ys)
+                && !nearSegment(x, y, 0.5, 0.40, 0.5, 0.60, 0.09) && !inDisc(x, y, 0.5, 0.80, 0.09));
     }
 
     private static void paint(int[] pixels, Shape shape) {

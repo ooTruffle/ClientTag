@@ -107,6 +107,15 @@ public final class ClientTagConfig extends Config {
     @Color(title = "Color", category = "OneClient", alpha = false)
     public PolyColor polyPlusColor = new PolyColor(0xFFFFFFFF);
 
+    @Switch(title = "Show Flag Icon", description = "Show a warning triangle by players you flagged with /clienttag flag <player> <reason>.", category = "Flagged Players")
+    public boolean flaggedEnabled = true;
+    @Switch(title = "Custom Color", description = "Use another color than gold for the warning triangle.", category = "Flagged Players")
+    public boolean flaggedCustomColor = false;
+    @Color(title = "Color", category = "Flagged Players", alpha = false)
+    public PolyColor flaggedColor = new PolyColor(0xFFFFAA00);
+    @Switch(title = "Chat Alerts", description = "Say in chat, with your reason, when a player you flagged is on the same server. Once per player each time you join.", category = "Flagged Players")
+    public boolean flagAlerts = true;
+
     private ClientTagConfig() {
         super("clienttag.json", "ClientTag", Category.VISUALS);
         // The mod used to be called LunerTag: carry its settings over until ours are first saved.
