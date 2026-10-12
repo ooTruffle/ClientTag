@@ -62,6 +62,18 @@ public final class ClientTagSettings {
         return !LOADED || Present.flagAlerts();
     }
 
+    /** The "name reason" rows of the flagged players list in the settings, or null without OneConfig. */
+    public static String[] flagList() {
+        return LOADED ? Present.flagList() : null;
+    }
+
+    /** Replaces the flagged players list in the settings; does nothing without OneConfig. */
+    public static void setFlagList(String[] rows) {
+        if (LOADED) {
+            Present.setFlagList(rows);
+        }
+    }
+
     /** Every client, in the order their icons are drawn, left to right. */
     public static List<ClientIcon> iconOrder() {
         return LOADED ? Present.iconOrder() : DEFAULT_ORDER;
@@ -134,6 +146,14 @@ public final class ClientTagSettings {
 
         static boolean flagAlerts() {
             return config().flagAlerts;
+        }
+
+        static String[] flagList() {
+            return config().flagList;
+        }
+
+        static void setFlagList(String[] rows) {
+            config().setFlagList(rows);
         }
 
         static List<ClientIcon> iconOrder() {
