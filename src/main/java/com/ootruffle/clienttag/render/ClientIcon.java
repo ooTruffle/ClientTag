@@ -5,6 +5,7 @@ import com.ootruffle.clienttag.CosmeticaTagManager;
 import com.ootruffle.clienttag.DawnTagManager;
 import com.ootruffle.clienttag.EssentialTagManager;
 import com.ootruffle.clienttag.LabyModTagManager;
+import com.ootruffle.clienttag.LocalFlags;
 import com.ootruffle.clienttag.LunarTagManager;
 import com.ootruffle.clienttag.NativeClients;
 import com.ootruffle.clienttag.NoRiskTagManager;
@@ -30,6 +31,8 @@ import java.util.function.Function;
  * Lunar, Dawn, Essential, NoRisk and LabyMod icons are generated in code rather than shipped as
  * assets, so none of those clients' artwork is used: Lunar gets a crescent moon, Dawn a rising sun,
  * Essential a sparkle, NoRisk a shield, LabyMod a wolf head, and ClientTag itself a name tag.
+ * The last entry, {@link #FLAGGED}, isn't a client at all but the warning triangle for players
+ * the user flagged locally, so it can be ordered, hidden and recolored like the rest.
  * PolyPlus gets its own badge (used with Polyfrost's permission), and Cosmetica its halo (at its
  * lead dev's request), but only when PolyPlus isn't installed to draw it.
  * <p>
@@ -93,7 +96,12 @@ public enum ClientIcon {
     CLIENTTAG(new Spec("clienttag", "ClientTag", '\uE006')
             .color(ClientTagUsers::getClientTagColor)
             .art(IconArt::nametag)
-            .config("clientTag", null));
+            .config("clientTag", null)),
+    // Not a client: a warning triangle for players the user flagged themselves (see LocalFlags).
+    FLAGGED(new Spec("flagged", "Flagged", '\uE008')
+            .color(LocalFlags::getFlagColor)
+            .art(IconArt::warning)
+            .config("flagged", null));
 
     public static final int TEXTURE_SIZE = 32;
 
