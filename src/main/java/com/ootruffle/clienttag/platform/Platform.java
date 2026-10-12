@@ -94,6 +94,9 @@ public interface Platform {
     /** Whether the question from {@link #ask} is still on screen. */
     boolean isAsking();
 
+    /** Whether any screen (a menu, chat, a settings page) is open over the game. */
+    boolean isScreenOpen();
+
     /**
      * Asks the player a yes/no question over whatever is open (a menu, or the world), going
      * back to it afterwards. The buttons only work after {@code delaySeconds}, so it gets read.

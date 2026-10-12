@@ -20,6 +20,7 @@ import org.polyfrost.oneconfig.api.config.v1.Property;
 import org.polyfrost.oneconfig.api.config.v1.annotations.Color;
 import org.polyfrost.oneconfig.api.config.v1.annotations.DraggableList;
 import org.polyfrost.oneconfig.api.config.v1.annotations.Switch;
+import org.polyfrost.oneconfig.api.config.v1.annotations.TextList;
 
 /**
  * The OneConfig settings page. Only ever loaded through {@link ClientTagSettings} when
@@ -113,8 +114,11 @@ public final class ClientTagConfig extends Config {
     public boolean flaggedCustomColor = false;
     @Color(title = "Color", category = "Flagged Players", alpha = false)
     public PolyColor flaggedColor = new PolyColor(0xFFFFAA00);
-    @Switch(title = "Chat Alerts", description = "Say in chat, with your reason, when a player you flagged is on the same server. Once per player each time you join.", category = "Flagged Players")
+    @Switch(title = "Chat Alerts", description = "Say in chat, with your reason, when a player you flagged shows up - again if they come back after a minute away.", category = "Flagged Players")
     public boolean flagAlerts = true;
+    @TextList(title = "Flagged Players", description = "One player per row: their name, a space, then your reason. Changes apply once you close the settings.", category = "Flagged Players",
+            placeholder = "Name reason", regex = "\\w{1,16}( .*)?", reorderable = false, addText = "Flag a player")
+    public String[] flagList = new String[0];
 
     private ClientTagConfig() {
         super("clienttag.json", "ClientTag", Category.VISUALS);
@@ -147,6 +151,11 @@ public final class ClientTagConfig extends Config {
             getProperty("iconOrder").setAs(names);
             save();
         }
+    }
+
+    /** Replaces the flagged players list, as LocalFlags keeps it. */
+    public void setFlagList(String[] rows) {
+        getProperty("flagList").setAs(rows);
     }
 
     /** Every client, in the order the user wants their icons drawn. */

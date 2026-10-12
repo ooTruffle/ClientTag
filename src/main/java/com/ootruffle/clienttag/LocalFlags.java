@@ -19,14 +19,15 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,11 +42,15 @@ import org.apache.logging.log4j.Logger;
 /**
  * Players the user flagged for their own reasons. Purely local: flags live in
  * config/clienttag/flags.json and are never sent anywhere. A flagged player gets the
- * {@link ClientIcon#FLAGGED} warning triangle, and while on a server, chat says (once per
- * player each time we join) when one of them is in the world or the tab list, with the reason.
+ * {@link ClientIcon#FLAGGED} warning triangle, and while on a server, chat says when one of
+ * them shows up in the world or the tab list, with the reason - again if they come back after
+ * being gone for {@link #ABSENCE_MS}, since a network like Hypixel keeps one address across
+ * lobbies and games.
  * <p>
- * Edited through {@code /clienttag flag|unflag|flags} (see config.FlagCommands, needs OneConfig)
- * or by hand while the game is closed. A player who isn't online is looked up on Mojang's API.
+ * Edited through {@code /clienttag flag|unflag|flags} (see config.FlagCommands), the "Flagged
+ * Players" list in the OneConfig settings (one "name reason" row per player, applied once the
+ * settings are closed), or by hand while the game is closed. A player who isn't online is
+ * looked up on Mojang's API.
  * Works whether or not the first-launch warning was accepted, since it connects nowhere but Mojang.
  */
 public final class LocalFlags {
@@ -60,6 +65,8 @@ public final class LocalFlags {
     private static final int PREFIX = 0x55FFFF;
     private static final int ERROR = 0xFF5555;
     private static final int CHECK_INTERVAL_TICKS = 20;
+    /** How long a flagged player must be gone before showing up again is announced again. */
+    private static final long ABSENCE_MS = 60_000;
     private static final Pattern VALID_NAME = Pattern.compile("\\w{1,16}");
     private static final String MOJANG_LOOKUP = "https://api.mojang.com/users/profiles/minecraft/";
     private static final HttpClient HTTP = HttpClient.newBuilder()
@@ -91,14 +98,20 @@ public final class LocalFlags {
     // Client thread only.
     private static String lastAddress;
     private static int tickCounter;
-    /** Flagged players already announced on this server. */
-    private static final Set<UUID> announced = new HashSet<>();
+    /** Flagged players seen on this server -> when they were last seen. */
+    private static final Map<UUID, Long> lastSeen = new HashMap<>();
+    /** The settings list as we last wrote it; anything else in it is the user's edit. */
+    private static String[] listedRows;
+    /** Set when the flags changed since the settings list was last written. */
+    private static volatile boolean listStale = true;
 
     private LocalFlags() {}
 
     /** Loads the saved flags; call once from the mod initializer. */
     public static void init() {
         load();
+        // Before any screen can show the list, so a stale copy in the settings is never taken for edits.
+        syncList();
     }
 
     /** The warning triangle's color (RGB) for a flagged player, else null. */
@@ -116,28 +129,106 @@ public final class LocalFlags {
         final String address = platform.currentServerAddress();
         if (!Objects.equals(address, lastAddress)) {
             lastAddress = address;
-            announced.clear();
+            lastSeen.clear();
             tickCounter = CHECK_INTERVAL_TICKS;
         }
-        if (address == null || flags.isEmpty() || !ClientTagSettings.flagAlerts() || ++tickCounter < CHECK_INTERVAL_TICKS) {
+        if (++tickCounter < CHECK_INTERVAL_TICKS) {
             return;
         }
         tickCounter = 0;
+        // Not while a screen is open: the user may be halfway through editing the list.
+        if (!platform.isScreenOpen()) {
+            syncList();
+        }
+        if (address == null || flags.isEmpty() || !ClientTagSettings.flagAlerts()) {
+            return;
+        }
 
+        final long now = System.currentTimeMillis();
         final UUID self = platform.localPlayerId();
         platform.forEachPlayerName((uuid, name) -> {
             if (!uuid.equals(self)) {
                 rename(uuid, name);
-                announce(uuid);
+                announce(uuid, now);
             }
         });
     }
 
-    private static void announce(UUID uuid) {
+    private static void announce(UUID uuid, long now) {
         final Flag flag = flags.get(uuid);
-        if (flag != null && announced.add(uuid)) {
+        if (flag == null) {
+            return;
+        }
+        final Long seen = lastSeen.put(uuid, now);
+        if (seen == null || now - seen > ABSENCE_MS) {
             say(withReason(line(new ChatPart(flag.name, NAME), new ChatPart(" is here", TEXT)), flag.reason));
         }
+    }
+
+    /**
+     * Applies the user's edits to the settings list, if they made any, then writes the list
+     * back from the flags if they changed. Rows are "name reason"; a row for someone who isn't
+     * flagged yet flags them, and a flagged player without a row is unflagged.
+     */
+    private static void syncList() {
+        final String[] rows = ClientTagSettings.flagList();
+        if (rows == null) {
+            return;
+        }
+        if (listedRows != null && !Arrays.equals(rows, listedRows)) {
+            final Map<String, String> wanted = new LinkedHashMap<>();
+            for (String row : rows) {
+                final String trimmed = row == null ? "" : row.trim();
+                if (!trimmed.isEmpty()) {
+                    final int space = trimmed.indexOf(' ');
+                    wanted.put(space < 0 ? trimmed : trimmed.substring(0, space),
+                            space < 0 ? "" : trimmed.substring(space + 1).trim());
+                }
+            }
+            for (Flag flag : new ArrayList<>(flags.values())) {
+                if (!containsIgnoreCase(wanted.keySet(), flag.name)) {
+                    unflag(flag.name);
+                }
+            }
+            for (Map.Entry<String, String> entry : wanted.entrySet()) {
+                final Flag flag = byName(entry.getKey());
+                if (flag == null || !flag.reason.equals(entry.getValue())) {
+                    flag(entry.getKey(), entry.getValue());
+                }
+            }
+            listStale = true;
+        }
+        if (listStale || listedRows == null) {
+            listStale = false;
+            final Map<String, Flag> sorted = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            for (Flag flag : flags.values()) {
+                sorted.put(flag.name, flag);
+            }
+            final List<String> fresh = new ArrayList<>();
+            for (Flag flag : sorted.values()) {
+                fresh.add(flag.reason.isEmpty() ? flag.name : flag.name + " " + flag.reason);
+            }
+            listedRows = fresh.toArray(new String[0]);
+            ClientTagSettings.setFlagList(listedRows.clone());
+        }
+    }
+
+    private static boolean containsIgnoreCase(Collection<String> names, String name) {
+        for (String candidate : names) {
+            if (candidate.equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Flag byName(String name) {
+        for (Flag flag : flags.values()) {
+            if (flag.name.equalsIgnoreCase(name)) {
+                return flag;
+            }
+        }
+        return null;
     }
 
     /** Keeps the saved name current after a name change, so unflag finds it. */
@@ -145,7 +236,7 @@ public final class LocalFlags {
         final Flag flag = flags.get(uuid);
         if (flag != null && name != null && !name.isEmpty() && !name.equals(flag.name)) {
             flags.put(uuid, new Flag(name, flag.reason, flag.added));
-            saveLater();
+            changed();
         }
     }
 
@@ -167,7 +258,7 @@ public final class LocalFlags {
         }
         if (foundId[0] != null) {
             // They're right here: no need to tell the user again on the next check.
-            announced.add(foundId[0]);
+            lastSeen.put(foundId[0], System.currentTimeMillis());
             put(foundId[0], found[0], trimmed);
             return;
         }
@@ -187,8 +278,9 @@ public final class LocalFlags {
     }
 
     private static void put(UUID uuid, String name, String reason) {
-        final Flag old = flags.put(uuid, new Flag(name, reason, System.currentTimeMillis()));
-        saveLater();
+        final Flag previous = flags.get(uuid);
+        final Flag old = flags.put(uuid, new Flag(name, reason, previous != null ? previous.added : System.currentTimeMillis()));
+        changed();
         say(withReason(line(new ChatPart(old == null ? "Flagged " : "Updated ", TEXT), new ChatPart(name, NAME)), reason));
     }
 
@@ -214,8 +306,8 @@ public final class LocalFlags {
             say(error(name + " isn't flagged."));
             return;
         }
-        announced.remove(target);
-        saveLater();
+        lastSeen.remove(target);
+        changed();
         say(line(new ChatPart("Unflagged ", TEXT), new ChatPart(removed.name, NAME)));
     }
 
@@ -336,6 +428,12 @@ public final class LocalFlags {
         } catch (Exception e) {
             LOGGER.warn("Couldn't read {}: {}", file(), e.toString());
         }
+    }
+
+    /** Saves the flags, and has the settings list rewritten. */
+    private static void changed() {
+        listStale = true;
+        saveLater();
     }
 
     private static void saveLater() {
