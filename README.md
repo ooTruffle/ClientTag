@@ -22,7 +22,7 @@ You can flag players for your own reasons. They get a warning triangle by their 
 - `/clienttag unflag <player>` - remove a flag
 - `/clienttag flags` - list everyone you've flagged
 
-The commands need OneConfig. Without it you can still edit `flags.json` by hand while the game is closed. The triangle and the chat alerts can be turned off or recolored in the "Flagged Players" tab of `/clienttag`.
+`/ct` works as a short form of `/clienttag` everywhere. The commands need OneConfig. Without it you can still edit `flags.json` by hand while the game is closed. The triangle and the chat alerts can be turned off or recolored in the "Flagged Players" tab of `/clienttag`.
 
 # Warning
 
