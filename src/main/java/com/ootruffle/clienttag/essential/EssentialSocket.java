@@ -181,7 +181,14 @@ public final class EssentialSocket implements WebSocket.Listener {
         final byte[] bodyBytes = body.toString().getBytes(StandardCharsets.UTF_8);
         final ByteBuffer frame = ByteBuffer.allocate(12 + idBytes.length + bodyBytes.length);
         frame.putInt(typeId).putInt(idBytes.length).put(idBytes).putInt(bodyBytes.length).put(bodyBytes).flip();
-        sendChain = sendChain.thenCompose(w -> w.sendBinary(frame, true));
+        sendChain = sendChain.thenCompose(w -> w.sendBinary(frame, true)).whenComplete(this::checkSent);
+    }
+
+    /** A failed send fails every send after it too, so drop the connection and let the manager reconnect. */
+    private void checkSent(WebSocket w, Throwable error) {
+        if (error != null && closed.complete("send failed: " + error) && ws != null) {
+            ws.abort();
+        }
     }
 
     private void onMessage(byte[] message) {

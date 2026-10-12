@@ -201,8 +201,9 @@ public final class LabyModTagManager {
             socket = null;
             viewport.clear();
             users.clear();
-            if (reason != null && reason.contains("server_restart")) {
-                // A planned restart: come back shortly, the way LabyMod does.
+            if (reason != null && reason.contains("server_restart") && now - connectedAt >= STABLE_CONNECTION_MS) {
+                // A planned restart: come back shortly, the way LabyMod does. Only after a connection
+                // that held, though - every reconnect costs a Mojang join, and repeated restarts back off.
                 nextConnectAttempt = now + 100 + ThreadLocalRandom.current().nextInt(400);
             } else {
                 scheduleRetry(now);
