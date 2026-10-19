@@ -6,6 +6,7 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.ootruffle.clienttag.LocalFlags;
+import com.ootruffle.clienttag.WhoCommand;
 import java.util.Collection;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -20,8 +21,13 @@ final class FlagCommands {
     private FlagCommands() {}
 
     static <S> LiteralArgumentBuilder<S> addTo(LiteralArgumentBuilder<S> root) {
+        final String command = "/" + root.getLiteral();
         return root
                 .then(LiteralArgumentBuilder.<S>literal("flag")
+                        .executes(ctx -> {
+                            WhoCommand.usage(command + " flag <player> [reason]");
+                            return 1;
+                        })
                         .then(RequiredArgumentBuilder.<S, String>argument("player", StringArgumentType.word())
                                 .suggests((ctx, builder) -> suggest(builder, LocalFlags.onlineNames()))
                                 .executes(ctx -> {
@@ -35,6 +41,10 @@ final class FlagCommands {
                                             return 1;
                                         }))))
                 .then(LiteralArgumentBuilder.<S>literal("unflag")
+                        .executes(ctx -> {
+                            WhoCommand.usage(command + " unflag <player>");
+                            return 1;
+                        })
                         .then(RequiredArgumentBuilder.<S, String>argument("player", StringArgumentType.word())
                                 .suggests((ctx, builder) -> suggest(builder, LocalFlags.flaggedNames()))
                                 .executes(ctx -> {
