@@ -5,6 +5,7 @@ import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
 import org.apache.logging.log4j.LogManager;
 
 /**
@@ -55,6 +56,23 @@ public final class NativeClients {
                 .map(mod -> mod.getMetadata().getName().toLowerCase(Locale.ROOT).startsWith("dawn client")
                         || mod.getMetadata().getContact().get("homepage").map(url -> url.contains("dawn.gg")).orElse(false))
                 .orElse(false);
+    }
+
+    /**
+     * Alpine's mod is obfuscated into one flat {@code alpineclient} package, and its launcher
+     * runs the game from %APPDATA%\.alpineclient\minecraft, so either gives it away.
+     */
+    public static boolean isAlpineClient() {
+        if (FabricLoader.getInstance().getGameDir().toAbsolutePath().toString().toLowerCase(Locale.ROOT).contains(".alpineclient")) {
+            return true;
+        }
+        for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+            final String id = mod.getMetadata().getId().toLowerCase(Locale.ROOT);
+            if (id.startsWith("alpine") || mod.getMetadata().getName().toLowerCase(Locale.ROOT).startsWith("alpine client")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether any of these Fabric mods is loaded. */
