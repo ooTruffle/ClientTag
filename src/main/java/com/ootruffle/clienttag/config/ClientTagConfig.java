@@ -93,6 +93,13 @@ public final class ClientTagConfig extends Config {
     @Color(title = "Color", category = "Cosmetica", alpha = false)
     public PolyColor cosmeticaColor = new PolyColor(0xFFFFFFFF);
 
+    @Switch(title = "Show Alpine Client", category = "Alpine Client")
+    public boolean alpineEnabled = true;
+    @Switch(title = "Custom Color", description = "Use another color than teal for the Alpine mountain.", category = "Alpine Client")
+    public boolean alpineCustomColor = false;
+    @Color(title = "Color", category = "Alpine Client", alpha = false)
+    public PolyColor alpineColor = new PolyColor(0xFF4FD1C5);
+
     @Switch(title = "Show ClientTag", description = "For ClientTag users who chose to show it, or aren't on any other client. Needs the ClientTag server.", category = "ClientTag")
     public boolean clientTagEnabled = true;
     @Switch(title = "Custom Color", description = "Use one color for everyone instead of the color the ClientTag server gives each player.", category = "ClientTag")

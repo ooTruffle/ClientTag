@@ -40,6 +40,7 @@ public final class IconArt {
         icons.put("essential", IconArt::sparkle);
         icons.put("norisk", IconArt::shield);
         icons.put("labymod", IconArt::wolf);
+        icons.put("alpine", IconArt::mountain);
         icons.put("clienttag", IconArt::nametag);
 
         final File dir = new File(args[0]);
@@ -134,6 +135,21 @@ public final class IconArt {
         final double[] ys = {0.06, 0.28, 0.28, 0.06, 0.54, 0.74, 0.96, 0.74, 0.54};
         paint(pixels, (x, y) -> inPolygon(x, y, xs, ys)
                 && !inDisc(x, y, 0.36, 0.52, 0.065) && !inDisc(x, y, 0.64, 0.52, 0.065));
+    }
+
+    /** Two mountain peaks, the taller one in front, with its snow cap cut off by a gap. */
+    static void mountain(int[] pixels) {
+        final double[] bigXs = {0.40, 0.80, 0.00};
+        final double[] bigYs = {0.10, 0.90, 0.90};
+        final double[] smallXs = {0.72, 1.00, 0.44};
+        final double[] smallYs = {0.38, 0.90, 0.90};
+        paint(pixels, (x, y) -> {
+            if (inPolygon(x, y, bigXs, bigYs)) {
+                // A gap below the peak's snow cap.
+                return y < 0.36 || y > 0.45;
+            }
+            return inPolygon(x, y, smallXs, smallYs);
+        });
     }
 
     /** A luggage-style name tag pointing left, with a hole punched near the point. */
