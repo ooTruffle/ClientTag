@@ -1,6 +1,7 @@
 package com.ootruffle.clienttag.legacy.render;
 
 import com.ootruffle.clienttag.render.ClientIcon;
+import java.nio.FloatBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
@@ -11,6 +12,7 @@ import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.ResourceLocation;
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
 /** Paints each {@link ClientIcon} into a dynamic texture on first use and draws it tinted. */
@@ -18,6 +20,8 @@ final class IconTextures {
 
     private static final int TEXTURE_SIZE = ClientIcon.TEXTURE_SIZE;
     private static final Map<ClientIcon, ResourceLocation> TEXTURES = new EnumMap<>(ClientIcon.class);
+    // Render thread only. glGetFloat needs a direct buffer of at least 16 floats.
+    private static final FloatBuffer FONT_COLOR = BufferUtils.createFloatBuffer(16);
 
     private IconTextures() {}
 
@@ -38,26 +42,35 @@ final class IconTextures {
 
     /**
      * Draws the icon at (x, y) in the middle of a FontRenderer draw. Uses raw GL inside a pushed
-     * attribute state rather than GlStateManager, so the font's color and blend state - and
-     * GlStateManager's cache of them - are exactly as they were for the next character.
+     * attribute state rather than GlStateManager, so the font's color and blend state are exactly
+     * as they were for the next character.
+     * <p>
+     * The tint goes into each vertex rather than the current GL color: renderers that replace
+     * vanilla's vertex drawing (e.g. Argentum) take the color from GlStateManager's cache, which
+     * raw GL never touches, so the icon would come out in the text's color.
      */
     static void drawInline(ClientIcon.Tinted tinted, float x, float y, int size, float alpha) {
         final Minecraft mc = Minecraft.getMinecraft();
         final int color = tinted.color();
+        final int r = color >> 16 & 0xFF, g = color >> 8 & 0xFF, b = color & 0xFF;
+        final int a = Math.round(Math.max(0.0F, Math.min(1.0F, alpha)) * 255.0F);
         mc.getTextureManager().bindTexture(texture(mc, tinted.icon()));
+        GL11.glGetFloat(GL11.GL_CURRENT_COLOR, FONT_COLOR);
         GL11.glPushAttrib(GL11.GL_CURRENT_BIT | GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glColor4f((color >> 16 & 0xFF) / 255.0F, (color >> 8 & 0xFF) / 255.0F, (color & 0xFF) / 255.0F, alpha);
         final Tessellator tessellator = Tessellator.getInstance();
         final WorldRenderer worldRenderer = tessellator.getWorldRenderer();
-        worldRenderer.begin(7, DefaultVertexFormats.POSITION_TEX);
-        worldRenderer.pos(x, y + size, 0.0D).tex(0.0D, 1.0D).endVertex();
-        worldRenderer.pos(x + size, y + size, 0.0D).tex(1.0D, 1.0D).endVertex();
-        worldRenderer.pos(x + size, y, 0.0D).tex(1.0D, 0.0D).endVertex();
-        worldRenderer.pos(x, y, 0.0D).tex(0.0D, 0.0D).endVertex();
+        worldRenderer.begin(7, DefaultVertexFormats.POSITION_TEX_COLOR);
+        worldRenderer.pos(x, y + size, 0.0D).tex(0.0D, 1.0D).color(r, g, b, a).endVertex();
+        worldRenderer.pos(x + size, y + size, 0.0D).tex(1.0D, 1.0D).color(r, g, b, a).endVertex();
+        worldRenderer.pos(x + size, y, 0.0D).tex(1.0D, 0.0D).color(r, g, b, a).endVertex();
+        worldRenderer.pos(x, y, 0.0D).tex(0.0D, 0.0D).color(r, g, b, a).endVertex();
         tessellator.draw();
         GL11.glPopAttrib();
+        // Drawing with a color array resets GlStateManager's cached color; put the font's back
+        // through it, so the cache and GL agree for the rest of the text.
+        GlStateManager.color(FONT_COLOR.get(0), FONT_COLOR.get(1), FONT_COLOR.get(2), FONT_COLOR.get(3));
     }
 
     private static ResourceLocation texture(Minecraft mc, ClientIcon icon) {
