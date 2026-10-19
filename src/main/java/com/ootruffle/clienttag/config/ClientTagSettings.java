@@ -112,6 +112,10 @@ public final class ClientTagSettings {
          */
         private static <S> LiteralArgumentBuilder<S> withWho(LiteralArgumentBuilder<S> root) {
             return root.then(LiteralArgumentBuilder.<S>literal("who")
+                    .executes(context -> {
+                        WhoCommand.usage("/" + root.getLiteral() + " who <player>");
+                        return 1;
+                    })
                     .then(RequiredArgumentBuilder.<S, String>argument("player", StringArgumentType.word())
                             .suggests((context, builder) -> {
                                 final String typed = builder.getRemaining().toLowerCase(Locale.ROOT);
