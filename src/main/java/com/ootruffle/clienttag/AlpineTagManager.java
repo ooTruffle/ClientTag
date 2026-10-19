@@ -42,6 +42,7 @@ public final class AlpineTagManager {
     private static final long LOOKUP_INTERVAL_MS = 5_000;
     private static final long SERVER_CHANGE_DELAY_MS = 15_000;
     private static final long AUTH_TIMEOUT_MS = 30_000;
+    private static final int MAX_LOGGED_LOOKUPS = 5;
     private static final long MIN_BACKOFF_MS = 10_000;
     private static final long MAX_BACKOFF_MS = 300_000;
     private static final long STABLE_CONNECTION_MS = 300_000;
@@ -65,6 +66,7 @@ public final class AlpineTagManager {
     private static long connectedAt;
     private static long lookupsFrom;
     private static long lastLookup;
+    private static int loggedLookups;
     private static final Set<UUID> answered = new HashSet<>();
     private static final Map<UUID, Integer> attempts = new HashMap<>();
     private static long nextConnectAttempt;
@@ -158,6 +160,9 @@ public final class AlpineTagManager {
         }
         socket.lookup(batch);
         lastLookup = now;
+        if (loggedLookups++ < MAX_LOGGED_LOOKUPS) {
+            LOGGER.info("Asked Alpine about {} players", batch.size());
+        }
     }
 
     private static void onLookup(UUID uuid, boolean alpineUser) {

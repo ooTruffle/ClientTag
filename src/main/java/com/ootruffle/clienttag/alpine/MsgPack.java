@@ -175,6 +175,78 @@ final class MsgPack {
             return (int) n;
         }
 
+        boolean peekIsNil() throws IOException {
+            return peek() == 0xC0;
+        }
+
+        boolean peekIsString() throws IOException {
+            final int b = peek();
+            return b >= 0xA0 && b <= 0xBF || b >= 0xD9 && b <= 0xDB;
+        }
+
+        /** Skips one value of any type, including everything inside an array or map. */
+        void skipValue() throws IOException {
+            long pending = 1;
+            while (pending-- > 0) {
+                final int b = u8();
+                if (b <= 0x7F || b >= 0xE0 || b == 0xC0 || b == 0xC2 || b == 0xC3) {
+                    continue;
+                }
+                if (b >= 0xA0 && b <= 0xBF) {
+                    skip(b & 0x1F);
+                } else if (b >= 0x90 && b <= 0x9F) {
+                    pending += b & 0x0F;
+                } else if (b >= 0x80 && b <= 0x8F) {
+                    pending += 2L * (b & 0x0F);
+                } else {
+                    try {
+                        switch (b) {
+                            case 0xCC: case 0xD0: skip(1); break;
+                            case 0xCD: case 0xD1: skip(2); break;
+                            case 0xCE: case 0xD2: case 0xCA: skip(4); break;
+                            case 0xCF: case 0xD3: case 0xCB: skip(8); break;
+                            case 0xD9: case 0xC4: skip(u8()); break;
+                            case 0xDA: case 0xC5: skip(in.getShort() & 0xFFFF); break;
+                            case 0xDB: case 0xC6: skip(in.getInt()); break;
+                            case 0xDC: pending += in.getShort() & 0xFFFF; break;
+                            case 0xDD: pending += in.getInt() & 0xFFFFFFFFL; break;
+                            case 0xDE: pending += 2L * (in.getShort() & 0xFFFF); break;
+                            case 0xDF: pending += 2L * (in.getInt() & 0xFFFFFFFFL); break;
+                            case 0xD4: skip(2); break;
+                            case 0xD5: skip(3); break;
+                            case 0xD6: skip(5); break;
+                            case 0xD7: skip(9); break;
+                            case 0xD8: skip(17); break;
+                            case 0xC7: skip(u8() + 1); break;
+                            case 0xC8: skip((in.getShort() & 0xFFFF) + 1); break;
+                            case 0xC9: skip(in.getInt() + 1); break;
+                            default: throw new IOException("unknown type 0x" + Integer.toHexString(b));
+                        }
+                    } catch (BufferUnderflowException e) {
+                        throw new IOException("truncated value", e);
+                    }
+                }
+                // Every value takes at least a byte, so more than are left can only be garbage.
+                if (pending > in.remaining()) {
+                    throw new IOException("value longer than the frame");
+                }
+            }
+        }
+
+        private void skip(int bytes) throws IOException {
+            if (bytes < 0 || bytes > in.remaining()) {
+                throw new IOException("truncated value");
+            }
+            in.position(in.position() + bytes);
+        }
+
+        private int peek() throws IOException {
+            if (!in.hasRemaining()) {
+                throw new IOException("unexpected end of frame");
+            }
+            return in.get(in.position()) & 0xFF;
+        }
+
         private int u8() throws IOException {
             if (!in.hasRemaining()) {
                 throw new IOException("unexpected end of frame");
