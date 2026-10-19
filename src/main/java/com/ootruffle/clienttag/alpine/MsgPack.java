@@ -54,6 +54,25 @@ final class MsgPack {
             return this;
         }
 
+        Writer packString(String s) {
+            final byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+            final int n = bytes.length;
+            if (n < 32) {
+                out.write(0xA0 | n);
+            } else if (n < 0x100) {
+                out.write(0xD9);
+                write(n, 1);
+            } else if (n < 0x10000) {
+                out.write(0xDA);
+                write(n, 2);
+            } else {
+                out.write(0xDB);
+                write(n, 4);
+            }
+            out.write(bytes, 0, n);
+            return this;
+        }
+
         Writer packArrayHeader(int n) {
             if (n < 16) {
                 out.write(0x90 | n);
