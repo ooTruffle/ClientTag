@@ -27,12 +27,15 @@ public final class ClientTag {
     public static void init() {
         migrateLegacyFiles();
         ClientTagSettings.init();
+        LocalFlags.init();
         System.out.println("[ClientTag] Initialized.");
     }
 
     /** Called at the end of every client tick. */
     public static void onClientTick() {
         NativeClients.settle();
+        // Flags are local, so they work before (or without) the warning being accepted.
+        LocalFlags.onClientTick();
         // Nothing connects anywhere until the first-launch warning has been accepted.
         if (!Consent.accepted()) {
             Consent.askIfNeeded();

@@ -126,6 +126,8 @@ val generateIconFont = tasks.register<JavaExec>("generateIconFont") {
         listOf(output.get().dir("assets/$modId/textures/font").asFile.absolutePath)
     })
     outputs.dir(output)
+    // Start empty, so textures of icons that were removed don't linger and end up in the jar.
+    doFirst { delete(output) }
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(requiredJava.majorVersion)
     }
