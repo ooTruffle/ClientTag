@@ -59,7 +59,6 @@ public final class ClientTagUsers {
 
     // Client thread only.
     private static String lastAddress;
-    private static boolean wasEnabled = true;
     private static int tickCounter;
 
     // Background thread only.
@@ -98,19 +97,13 @@ public final class ClientTagUsers {
 
     public static void onClientTick() {
         final Platform platform = Platform.get();
-        final boolean enabled = ClientTagSettings.useServer();
-        final String address = enabled ? platform.currentServerAddress() : null;
+        // Turned off in the settings counts as being out of a world, which leaves the server.
+        final String address = ClientTagSettings.useServer() ? platform.currentServerAddress() : null;
         if (!Objects.equals(address, lastAddress)) {
             lastAddress = address;
             tickCounter = SYNC_INTERVAL_TICKS;
             final boolean nowActive = address != null;
             EXECUTOR.execute(() -> changeServer(nowActive));
-        }
-        if (enabled != wasEnabled) {
-            wasEnabled = enabled;
-            if (!enabled) {
-                EXECUTOR.execute(() -> changeServer(false));
-            }
         }
         if (address == null || ++tickCounter < SYNC_INTERVAL_TICKS) {
             return;
