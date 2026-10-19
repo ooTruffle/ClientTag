@@ -12,6 +12,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -30,11 +31,12 @@ import org.apache.logging.log4j.Logger;
  *         session server, then answer C->S {@code 160} with no body</li>
  *     <li>S->C {@code 161 {authenticated}}: the result of that</li>
  *     <li>C->S {@code 163 [N x {uuidMost, uuidLeast}]} looks up to 500 players; S->C
- *         {@code 163 [N x {uuidMost, uuidLeast, isAlpineUser, (cosmetics [M x {type, id}] if a user)}]}
+ *         {@code 163 [N x {uuidMost, uuidLeast, isAlpineUser, cosmetics [M x {type, id}]}]}
  *         answers it</li>
  *     <li>S->C {@code 0 {code, message}} is (most likely) an error, and only logged</li>
  * </ul>
  * Text frames are only ever logged by the real client, so they're ignored. Pings are answered by the JDK.
+ * Starting the game with {@code -Dclienttag.alpine.debug=true} logs every frame both ways.
  * <p>
  * Layout taken from Alpine Client 1.7.0-beta.r4 (commit 42b6986).
  */
@@ -52,6 +54,12 @@ public final class AlpineSocket implements WebSocket.Listener {
     private static final int AUTH_CHALLENGE = 160;
     private static final int AUTH_RESULT = 161;
     private static final int PLAYER_LOOKUP = 163;
+
+    /** How many replies and unreadable frames each connection logs. */
+    private static final int MAX_LOGGED = 5;
+    private static final int HEX_LIMIT = 256;
+    /** {@code -Dclienttag.alpine.debug=true} logs every frame sent and received. */
+    private static final boolean DEBUG = Boolean.getBoolean("clienttag.alpine.debug");
 
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -75,6 +83,9 @@ public final class AlpineSocket implements WebSocket.Listener {
     private CompletableFuture<WebSocket> sendChain;
     private volatile WebSocket ws;
     private volatile boolean authenticated;
+    // Socket thread only.
+    private int loggedReplies;
+    private int loggedFailures;
 
     private AlpineSocket(Listener listener) {
         this.listener = listener;
@@ -102,11 +113,25 @@ public final class AlpineSocket implements WebSocket.Listener {
         headers.put("mcVersion", FabricLoader.getInstance().getModContainer("minecraft")
                 .map(mod -> mod.getMetadata().getVersion().getFriendlyString())
                 .orElse("1.8.9"));
-        headers.put("operatingSystem", System.getProperty("os.name", "unknown"));
+        headers.put("operatingSystem", osName());
         headers.put("protocolVersion", PROTOCOL_VERSION);
-        headers.put("playerId", self.toString());
+        // Straight from Minecraft's session, which keeps the UUID without dashes.
+        headers.put("playerId", self.toString().replace("-", ""));
         headers.put("username", name);
         return headers;
+    }
+
+    /** The first of Alpine's OS names (or their aliases) that os.name contains, as the real client picks it. */
+    private static String osName() {
+        final String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        for (String[] names : new String[][] {{"linux"}, {"solaris"}, {"windows"}, {"macos", "osx", "mac os x"}}) {
+            for (String name : names) {
+                if (os.contains(name)) {
+                    return names[0];
+                }
+            }
+        }
+        return "unknown";
     }
 
     public boolean isOpen() {
@@ -144,10 +169,16 @@ public final class AlpineSocket implements WebSocket.Listener {
 
     /** JDK WebSockets reject overlapping sends, so each send waits for the previous one. */
     private synchronized void send(byte[] frame) {
+        if (DEBUG) {
+            LOGGER.info("Alpine frame sent: {}", hex(frame));
+        }
         sendChain = sendChain.thenCompose(w -> w.sendBinary(ByteBuffer.wrap(frame), true));
     }
 
     private void onMessage(byte[] data) throws Exception {
+        if (DEBUG) {
+            LOGGER.info("Alpine frame received: {}", hex(data));
+        }
         final MsgPack.Reader in = new MsgPack.Reader(data);
         switch (in.unpackInt()) {
             case AUTH_CHALLENGE:
@@ -166,27 +197,57 @@ public final class AlpineSocket implements WebSocket.Listener {
                 onLookupReply(in);
                 break;
             case ERROR:
-                LOGGER.info("Alpine socket said: {} {}", in.hasNext() ? in.unpackLong() : "", in.hasNext() ? in.unpackString() : "");
+                LOGGER.info("Alpine socket said: {}", hex(data));
                 break;
             default:
                 break;
         }
     }
 
+    /** The frame in hex, cut off after {@link #HEX_LIMIT} bytes. */
+    private static String hex(byte[] data) {
+        final StringBuilder out = new StringBuilder();
+        for (int i = 0; i < Math.min(data.length, HEX_LIMIT); i++) {
+            out.append(String.format("%02x ", data[i]));
+        }
+        return out.append(data.length > HEX_LIMIT ? "... (" + data.length + " bytes)" : "").toString().trim();
+    }
+
     private void onLookupReply(MsgPack.Reader in) throws IOException {
         final int n = in.unpackArrayHeader();
+        int users = 0;
         for (int i = 0; i < n; i++) {
             final UUID uuid = new UUID(in.unpackLong(), in.unpackLong());
             final boolean alpineUser = in.unpackBoolean();
+            // The real client reads the cosmetics for every player, users or not.
+            skipCosmetics(in);
             if (alpineUser) {
-                // Equipped cosmetics, which don't change the indicator.
-                final int cosmetics = in.unpackArrayHeader();
-                for (int j = 0; j < cosmetics; j++) {
-                    in.unpackString();
-                    in.unpackString();
-                }
+                users++;
             }
             listener.onLookup(uuid, alpineUser);
+        }
+        if (loggedReplies++ < MAX_LOGGED) {
+            LOGGER.info("Alpine answered for {} players, {} on Alpine", n, users);
+        }
+    }
+
+    /**
+     * Equipped cosmetics, which don't change the indicator: {@code M x {type, id}}. Each one may come
+     * as two bare strings or wrapped in its own array or map, so anything that isn't a string is skipped whole.
+     */
+    private static void skipCosmetics(MsgPack.Reader in) throws IOException {
+        if (in.peekIsNil()) {
+            in.skipValue();
+            return;
+        }
+        final int cosmetics = in.unpackArrayHeader();
+        for (int j = 0; j < cosmetics; j++) {
+            if (in.peekIsString()) {
+                in.unpackString();
+                in.unpackString();
+            } else {
+                in.skipValue();
+            }
         }
     }
 
@@ -216,8 +277,11 @@ public final class AlpineSocket implements WebSocket.Listener {
             partial.reset();
             try {
                 onMessage(message);
-            } catch (Exception ignored) {
-                // A malformed frame shouldn't take the socket down.
+            } catch (Exception e) {
+                // A malformed frame shouldn't take the socket down, but the layout may have changed.
+                if (loggedFailures++ < MAX_LOGGED) {
+                    LOGGER.warn("Couldn't read an Alpine frame ({}): {}", e.toString(), hex(message));
+                }
             }
         }
         webSocket.request(1);
@@ -226,6 +290,9 @@ public final class AlpineSocket implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+        if (DEBUG) {
+            LOGGER.info("Alpine text frame received: {}", data);
+        }
         webSocket.request(1);
         return null;
     }
