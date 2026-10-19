@@ -5,6 +5,7 @@ import com.ootruffle.clienttag.platform.Platform;
 import com.ootruffle.clienttag.platform.Platform.ChatPart;
 import com.ootruffle.clienttag.render.ClientIcon;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -31,6 +32,14 @@ public final class WhoCommand {
         final TreeSet<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         Platform.get().forEachPlayerName((uuid, name) -> names.add(name));
         return names;
+    }
+
+    /**
+     * Says in chat how a subcommand is used, e.g. {@code /ct who <player>}. For subcommands typed
+     * without their arguments: left without a handler, OneConfig would send them on to the server.
+     */
+    public static void usage(String command) {
+        Platform.get().showMessage(line(new ChatPart("Usage: ", ERROR), new ChatPart(command, NAME)));
     }
 
     /** Answers {@code /clienttag who <name>} in chat. */
@@ -120,10 +129,10 @@ public final class WhoCommand {
         return found[0] != null ? found[0] : found[1];
     }
 
-    private static List<ChatPart> line(ChatPart first) {
+    private static List<ChatPart> line(ChatPart... first) {
         final List<ChatPart> parts = new ArrayList<>();
         parts.add(new ChatPart("ClientTag » ", PREFIX));
-        parts.add(first);
+        parts.addAll(Arrays.asList(first));
         return parts;
     }
 
