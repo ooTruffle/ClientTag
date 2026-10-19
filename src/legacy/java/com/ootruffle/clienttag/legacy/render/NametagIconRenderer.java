@@ -8,7 +8,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 
 /**
- * Puts the client indicators (Lunar crescent, Dawn sunrise, Essential sparkle, NoRisk shield, LabyMod wolf, Cosmetica halo)
+ * Puts the client indicators (Lunar crescent, Dawn sunrise, Essential sparkle, NoRisk shield, LabyMod wolf, Alpine mountain, Cosmetica halo)
  * in front of a player's nametag as {@link IconGlyphs} characters, each tinted with the color
  * its client reports for them.
  * <p>
