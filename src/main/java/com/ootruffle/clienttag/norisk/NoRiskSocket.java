@@ -130,11 +130,18 @@ public final class NoRiskSocket implements WebSocket.Listener {
             final ByteBuffer buffer = ByteBuffer.allocate(2 + channel.length + 4 + cbor.length);
             buffer.putShort((short) channel.length).put(channel).putInt(cbor.length).put(cbor).flip();
             // JDK WebSockets reject overlapping sends, so each send waits for the previous one.
-            sendChain = sendChain.thenCompose(w -> w.sendBinary(buffer, true));
+            sendChain = sendChain.thenCompose(w -> w.sendBinary(buffer, true)).whenComplete(this::checkSent);
         } else {
             final String json = frame.toString();
             final String text = CHANNEL + " " + json.length() + " " + json + " ";
-            sendChain = sendChain.thenCompose(w -> w.sendText(text, true));
+            sendChain = sendChain.thenCompose(w -> w.sendText(text, true)).whenComplete(this::checkSent);
+        }
+    }
+
+    /** A failed send fails every send after it too, so drop the connection and let the manager reconnect. */
+    private void checkSent(WebSocket w, Throwable error) {
+        if (error != null && closed.complete("send failed: " + error) && ws != null) {
+            ws.abort();
         }
     }
 

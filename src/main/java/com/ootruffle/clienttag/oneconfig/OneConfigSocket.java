@@ -104,7 +104,14 @@ public final class OneConfigSocket implements WebSocket.Listener {
 
     /** JDK WebSockets reject overlapping sends, so each send waits for the previous one. */
     private synchronized void send(String text) {
-        sendChain = sendChain.thenCompose(w -> w.sendText(text, true));
+        sendChain = sendChain.thenCompose(w -> w.sendText(text, true)).whenComplete(this::checkSent);
+    }
+
+    /** A failed send fails every send after it too, so drop the connection and let the manager reconnect. */
+    private void checkSent(WebSocket w, Throwable error) {
+        if (error != null && closed.complete("send failed: " + error) && ws != null) {
+            ws.abort();
+        }
     }
 
     private void onMessage(String text) {
