@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -23,8 +24,9 @@ import org.apache.logging.log4j.Logger;
 /**
  * Looks players up on Alpine's socket at the real client's pace: at most one lookup every
  * 5 s, of up to 500 players nobody has answered for yet, each asked about at most 5 times.
- * Answers stay until we change servers; lookups start again 15 s after that. Alpine reports
- * no per-player color, so every Alpine user gets the same one.
+ * Answers stay until we change servers; lookups start again 15 s after that. Like the real
+ * client, it tells Alpine which server we're on (packet 162) after logging in and on every
+ * server change. Alpine reports no per-player color, so every Alpine user gets the same one.
  * <p>
  * All socket work runs on one background thread - the client thread only snapshots the
  * player list and never waits on the network.
@@ -62,6 +64,7 @@ public final class AlpineTagManager {
 
     // Background thread only.
     private static boolean active;
+    private static String serverAddress;
     private static AlpineSocket socket;
     private static long connectedAt;
     private static long lookupsFrom;
@@ -88,8 +91,7 @@ public final class AlpineTagManager {
         if (!Objects.equals(address, lastAddress)) {
             lastAddress = address;
             tickCounter = 0;
-            final boolean nowActive = address != null;
-            EXECUTOR.execute(() -> changeServer(nowActive));
+            EXECUTOR.execute(() -> changeServer(address));
         }
         if (enabled != wasEnabled) {
             wasEnabled = enabled;
@@ -119,10 +121,44 @@ public final class AlpineTagManager {
         }
     }
 
-    private static void changeServer(boolean nowActive) {
-        active = nowActive;
+    private static void changeServer(String address) {
+        active = address != null;
+        serverAddress = address;
         forget();
         lookupsFrom = System.currentTimeMillis() + SERVER_CHANGE_DELAY_MS;
+        if (socket != null && socket.isAuthenticated()) {
+            sendStatus(socket);
+        }
+    }
+
+    /**
+     * Tells Alpine where we are, as the real client does on joining a world and on leaving one.
+     * Without it the server takes us for a client in the menus and ignores lookups.
+     */
+    private static void sendStatus(AlpineSocket to) {
+        if (serverAddress == null) {
+            to.status(AlpineSocket.MENUS, AlpineSocket.MENUS);
+        } else if (serverAddress.equals(Platform.LAN_HOST)) {
+            // Hosting an Open to LAN world: the real client reports its integrated server as singleplayer.
+            to.status("singleplayer", "singleplayer");
+        } else {
+            to.status(host(serverAddress), serverAddress.toLowerCase(Locale.ROOT));
+        }
+    }
+
+    /** The address without its port or a trailing dot, lowercase, as the real client reports the host. */
+    private static String host(String address) {
+        String host = address;
+        if (host.startsWith("[")) {
+            final int end = host.indexOf(']');
+            host = end > 0 ? host.substring(1, end) : host;
+        } else if (host.indexOf(':') == host.lastIndexOf(':') && host.indexOf(':') >= 0) {
+            host = host.substring(0, host.indexOf(':'));
+        }
+        if (host.endsWith(".")) {
+            host = host.substring(0, host.length() - 1);
+        }
+        return host.toLowerCase(Locale.ROOT);
     }
 
     private static void sync() {
@@ -234,8 +270,13 @@ public final class AlpineTagManager {
                 }
 
                 @Override
-                public void onAuthenticated() {
+                public void onAuthenticated(AlpineSocket from) {
                     LOGGER.info("Authenticated with Alpine");
+                    EXECUTOR.execute(() -> {
+                        if (from == socket) {
+                            sendStatus(from);
+                        }
+                    });
                 }
 
                 @Override

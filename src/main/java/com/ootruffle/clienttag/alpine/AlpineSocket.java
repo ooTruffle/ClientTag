@@ -30,6 +30,9 @@ import org.apache.logging.log4j.Logger;
  *     <li>S->C {@code 160 {challenge}}: hash it as a Minecraft server ID, join that through Mojang's
  *         session server, then answer C->S {@code 160} with no body</li>
  *     <li>S->C {@code 161 {authenticated}}: the result of that</li>
+ *     <li>C->S {@code 162 {host, address}} says where we are: the server's host and the address as
+ *         typed, both lowercase, or {@code "menus"} twice out of a world. Lookups are sent only after it,
+ *         as the server ignores them from clients in the menus.</li>
  *     <li>C->S {@code 163 [N x {uuidMost, uuidLeast}]} looks up to 500 players; S->C
  *         {@code 163 [N x {uuidMost, uuidLeast, isAlpineUser, cosmetics [M x {type, id}]}]}
  *         answers it</li>
@@ -53,7 +56,12 @@ public final class AlpineSocket implements WebSocket.Listener {
     private static final int ERROR = 0;
     private static final int AUTH_CHALLENGE = 160;
     private static final int AUTH_RESULT = 161;
+    private static final int STATUS = 162;
     private static final int PLAYER_LOOKUP = 163;
+    private static final int SESSION = 164;
+
+    /** What the real client reports for both of 162's strings when it isn't on a server. */
+    public static final String MENUS = "menus";
 
     /** How many replies and unreadable frames each connection logs. */
     private static final int MAX_LOGGED = 5;
@@ -70,8 +78,8 @@ public final class AlpineSocket implements WebSocket.Listener {
         /** The server wants a session join for {@code serverId}, then {@link #answerChallenge}. */
         void onChallenge(AlpineSocket socket, String serverId);
 
-        /** The server accepted the join; lookups can be sent from now on. */
-        void onAuthenticated();
+        /** The server accepted the join; send {@link #status}, then lookups can follow. */
+        void onAuthenticated(AlpineSocket socket);
 
         /** Whether a player we looked up is on Alpine. */
         void onLookup(UUID player, boolean alpineUser);
@@ -158,6 +166,11 @@ public final class AlpineSocket implements WebSocket.Listener {
         send(new MsgPack.Writer().packLong(AUTH_CHALLENGE).toByteArray());
     }
 
+    /** Says which server we're on (see the class comment), or {@link #MENUS} for both when on none. */
+    public void status(String host, String address) {
+        send(new MsgPack.Writer().packLong(STATUS).packString(host).packString(address).toByteArray());
+    }
+
     /** Looks players up; callers keep it to 500 at a time, as the real client does. */
     public void lookup(Collection<UUID> players) {
         final MsgPack.Writer out = new MsgPack.Writer().packLong(PLAYER_LOOKUP).packArrayHeader(players.size());
@@ -177,7 +190,9 @@ public final class AlpineSocket implements WebSocket.Listener {
 
     private void onMessage(byte[] data) throws Exception {
         if (DEBUG) {
-            LOGGER.info("Alpine frame received: {}", hex(data));
+            // 164 carries the account's cloud session token, which has no place in a log people share.
+            final boolean session = data.length >= 2 && (data[0] & 0xFF) == 0xCC && (data[1] & 0xFF) == SESSION;
+            LOGGER.info("Alpine frame received: {}", session ? "cc a4 (cloud session, " + data.length + " bytes)" : hex(data));
         }
         final MsgPack.Reader in = new MsgPack.Reader(data);
         switch (in.unpackInt()) {
@@ -187,7 +202,7 @@ public final class AlpineSocket implements WebSocket.Listener {
             case AUTH_RESULT:
                 if (in.unpackBoolean()) {
                     authenticated = true;
-                    listener.onAuthenticated();
+                    listener.onAuthenticated(this);
                 } else {
                     closed.complete("authentication rejected");
                     ws.abort();
