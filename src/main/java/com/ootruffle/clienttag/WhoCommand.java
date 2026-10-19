@@ -53,6 +53,10 @@ public final class WhoCommand {
         final List<ChatPart> on = new ArrayList<>();
         final List<String> notChecked = new ArrayList<>();
         for (ClientIcon icon : ClientTagSettings.iconOrder()) {
+            // Not a client; told apart below.
+            if (icon == ClientIcon.FLAGGED) {
+                continue;
+            }
             // Checked first: isEnabled is also false for a client the game runs.
             if (NativeClients.isRunning(icon)) {
                 notChecked.add(icon.displayName() + " (your game runs it)");
@@ -81,6 +85,11 @@ public final class WhoCommand {
         platform.showMessage(answer);
         if (!notChecked.isEmpty()) {
             platform.showMessage(line(new ChatPart("Not checked: " + String.join(", ", notChecked), TEXT)));
+        }
+        final String reason = LocalFlags.reason(player.uuid);
+        if (reason != null) {
+            platform.showMessage(line(new ChatPart(reason.isEmpty() ? "You flagged them." : "You flagged them: " + reason,
+                    ClientTagSettings.color(ClientIcon.FLAGGED, LocalFlags.FLAG_COLOR))));
         }
     }
 

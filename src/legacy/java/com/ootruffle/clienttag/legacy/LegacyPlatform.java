@@ -155,6 +155,11 @@ final class LegacyPlatform implements Platform {
     }
 
     @Override
+    public boolean isScreenOpen() {
+        return Minecraft.getMinecraft().currentScreen != null;
+    }
+
+    @Override
     public boolean isAsking() {
         return Minecraft.getMinecraft().currentScreen instanceof QuestionScreen;
     }

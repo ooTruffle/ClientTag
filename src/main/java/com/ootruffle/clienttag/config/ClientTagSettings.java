@@ -15,14 +15,15 @@ import org.polyfrost.oneconfig.api.commands.v1.CommandManager;
 import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
 
 /**
- * The mod's settings, editable through OneConfig when it's installed (also via /clienttag,
- * which also has {@code /clienttag who <player>}).
- * Without OneConfig every client is shown everywhere in its reported color.
+ * The mod's settings, editable through OneConfig when it's installed (also via /clienttag or /ct,
+ * which also has {@code who <player>} and the {@code flag}, {@code unflag} and {@code flags} commands).
+ * Without OneConfig every client is shown everywhere in its reported color, and there are no
+ * commands (config/clienttag/flags.json can still be edited by hand).
  * <p>
  * A client is always off while the game is running on it (see {@link NativeClients}) - it
  * draws its own indicators then, e.g. the PolyPlus mod draws its own badge.
  * <p>
- * {@link Present} is the only class touching OneConfig, and is never loaded without it.
+ * {@link Present} (with {@link FlagCommands}) is the only class touching OneConfig, and is never loaded without it.
  */
 public final class ClientTagSettings {
 
@@ -56,6 +57,23 @@ public final class ClientTagSettings {
         return !LOADED || Present.showOwnTag();
     }
 
+    /** Whether to say in chat when a flagged player is on the same server (see {@link com.ootruffle.clienttag.LocalFlags}). */
+    public static boolean flagAlerts() {
+        return !LOADED || Present.flagAlerts();
+    }
+
+    /** The "name reason" rows of the flagged players list in the settings, or null without OneConfig. */
+    public static String[] flagList() {
+        return LOADED ? Present.flagList() : null;
+    }
+
+    /** Replaces the flagged players list in the settings; does nothing without OneConfig. */
+    public static void setFlagList(String[] rows) {
+        if (LOADED) {
+            Present.setFlagList(rows);
+        }
+    }
+
     /** Every client, in the order their icons are drawn, left to right. */
     public static List<ClientIcon> iconOrder() {
         return LOADED ? Present.iconOrder() : DEFAULT_ORDER;
@@ -82,7 +100,10 @@ public final class ClientTagSettings {
         static void init() {
             config().preload();
             config().normalizeIconOrder();
-            CommandManager.INSTANCE.register(withWho(ScreensKt.addDefaultCommand(config(), "clienttag")));
+            // /ct is short for /clienttag. Each gets the whole tree: a redirect wouldn't run bare /ct.
+            for (String name : new String[] {"clienttag", "ct"}) {
+                CommandManager.INSTANCE.register(FlagCommands.addTo(withWho(ScreensKt.addDefaultCommand(config(), name))));
+            }
         }
 
         /**
@@ -121,6 +142,18 @@ public final class ClientTagSettings {
 
         static boolean showOwnTag() {
             return config().showOwnTag;
+        }
+
+        static boolean flagAlerts() {
+            return config().flagAlerts;
+        }
+
+        static String[] flagList() {
+            return config().flagList;
+        }
+
+        static void setFlagList(String[] rows) {
+            config().setFlagList(rows);
         }
 
         static List<ClientIcon> iconOrder() {
