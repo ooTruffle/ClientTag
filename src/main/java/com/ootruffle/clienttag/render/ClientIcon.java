@@ -1,5 +1,6 @@
 package com.ootruffle.clienttag.render;
 
+import com.ootruffle.clienttag.AlpineTagManager;
 import com.ootruffle.clienttag.ClientTagUsers;
 import com.ootruffle.clienttag.CosmeticaTagManager;
 import com.ootruffle.clienttag.DawnTagManager;
@@ -27,9 +28,9 @@ import java.util.function.Function;
  * {@link com.ootruffle.clienttag.config.ClientTagConfig} (named after {@link Spec#config}), and its
  * glyph in assets/clienttag/font/icons.json (plus {@link IconArt#main} if it's drawn in code).
  * <p>
- * Lunar, Dawn, Essential, NoRisk and LabyMod icons are generated in code rather than shipped as
+ * Lunar, Dawn, Essential, NoRisk, LabyMod and Alpine icons are generated in code rather than shipped as
  * assets, so none of those clients' artwork is used: Lunar gets a crescent moon, Dawn a rising sun,
- * Essential a sparkle, NoRisk a shield, LabyMod a wolf head, and ClientTag itself a name tag.
+ * Essential a sparkle, NoRisk a shield, LabyMod a wolf head, Alpine a mountain, and ClientTag itself a name tag.
  * PolyPlus gets its own badge (used with Polyfrost's permission), and Cosmetica its halo (at its
  * lead dev's request), but only when PolyPlus isn't installed to draw it.
  * <p>
@@ -88,6 +89,12 @@ public enum ClientIcon {
             .tick(CosmeticaTagManager::onClientTick)
             .config("cosmetica", "Cosmetica not installed")
             .runningWhen(() -> NativeClients.anyMod("cosmetica"))),
+    ALPINE(new Spec("alpine", "Alpine Client", '\uE009')
+            .color(AlpineTagManager::getAlpineColor)
+            .art(IconArt::mountain)
+            .tick(AlpineTagManager::onClientTick)
+            .config("alpine", "Not running on Alpine Client")
+            .runningWhen(NativeClients::isAlpineClient)),
     // ClientTag is never "running natively" from its own point of view, and ClientTagUsers is
     // ticked by ClientTag itself, since it also tells the other managers who to hide.
     CLIENTTAG(new Spec("clienttag", "ClientTag", '\uE006')

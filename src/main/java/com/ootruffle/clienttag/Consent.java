@@ -25,7 +25,7 @@ public final class Consent {
 
     private static final Logger LOGGER = LogManager.getLogger("ClientTag");
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int DELAY_SECONDS = 4;
     /** Ticks between attempts to put the in-game question back after something replaced it. */
     private static final int REOPEN_TICKS = 40;
@@ -33,7 +33,7 @@ public final class Consent {
     private static final String TITLE = "ClientTag - please read";
     private static final String MESSAGE =
             "ClientTag finds out which client other players use by logging your Minecraft account into "
-            + "Lunar Client, Dawn Client, Essential, NoRiskClient, LabyMod and PolyPlus services.\n"
+            + "Lunar Client, Dawn Client, Essential, NoRiskClient, LabyMod, Alpine Client and PolyPlus services.\n"
             + "This may break those services' terms of service, and they could ban or restrict your account "
             + "or your access to them.\n"
             + "\n"
@@ -127,8 +127,8 @@ public final class Consent {
 
     private static void save(boolean accepted) {
         final String text = "# ClientTag logs your Minecraft account into Lunar Client, Dawn Client, Essential,\n"
-                + "# NoRiskClient, LabyMod and PolyPlus services to show which client other players use. This\n"
-                + "# may break those services' terms of service and get your account banned or restricted.\n"
+                + "# NoRiskClient, LabyMod, Alpine Client and PolyPlus services to show which client other\n"
+                + "# players use. This may break those services' terms of service and get your account banned or restricted.\n"
                 + "# It also tells the ClientTag server (clienttags.fluffykiwi.net) which client you're on,\n"
                 + "# and anyone can look players up there.\n"
                 + "#\n"
