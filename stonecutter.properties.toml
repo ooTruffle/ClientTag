@@ -1,7 +1,7 @@
 mod.id = "clienttag"
 mod.name = "ClientTag"
 mod.group = "com.ootruffle.clienttag"
-mod.version = "1.0.0"
+mod.version = "1.2.0"
 mod.description = "Shows Lunar Client, Dawn Client, Essential, NoRiskClient, LabyMod, Alpine Client and OneClient indicators next to the nametags of other players who are using those clients."
 
 deps.fabric_loader = "0.19.5"
