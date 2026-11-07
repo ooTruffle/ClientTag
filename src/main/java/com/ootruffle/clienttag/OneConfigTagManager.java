@@ -9,6 +9,7 @@ import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,6 +46,7 @@ public final class OneConfigTagManager {
     private static final long STABLE_CONNECTION_MS = 300_000;
 
     private static final Set<UUID> online = ConcurrentHashMap.newKeySet();
+    private static final Answers answers = new Answers(0);
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-PolyPlus");
@@ -72,6 +74,11 @@ public final class OneConfigTagManager {
     private static long backoff = MIN_BACKOFF_MS;
 
     private OneConfigTagManager() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /** Whether PolyPlus reports the player online right now (only tracked without PolyPlus installed). */
     static boolean isOnline(UUID uuid) {
@@ -101,7 +108,11 @@ public final class OneConfigTagManager {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> tracked = new HashSet<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> tracked = new LinkedHashSet<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, self);
+        }
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         // Coalesce: if the background thread is still busy (e.g. connecting), the newest snapshot wins.
@@ -126,6 +137,7 @@ public final class OneConfigTagManager {
         pendingRequests.clear();
         failed.clear();
         online.clear();
+        answers.clear();
     }
 
     private static void sync() {
@@ -149,6 +161,7 @@ public final class OneConfigTagManager {
         if (!removed.isEmpty()) {
             subscribed.removeAll(removed);
             removed.forEach(online::remove);
+            answers.forget(removed);
             unsubscribe(removed);
         }
 
@@ -173,7 +186,14 @@ public final class OneConfigTagManager {
     }
 
     private static void onSnapshot(long requestId, List<UUID> users, List<UUID> rejected) {
-        pendingRequests.remove(requestId);
+        final List<UUID> batch = pendingRequests.remove(requestId);
+        if (batch != null) {
+            for (UUID uuid : batch) {
+                if (subscribed.contains(uuid)) {
+                    answers.answered(uuid);
+                }
+            }
+        }
         for (UUID uuid : users) {
             // Late answers for players who already left (or a previous server) don't count.
             if (subscribed.contains(uuid)) {
@@ -218,6 +238,7 @@ public final class OneConfigTagManager {
         pendingRequests.clear();
         failed.clear();
         online.clear();
+        answers.clear();
     }
 
     private static boolean ensureConnected() {
@@ -238,6 +259,7 @@ public final class OneConfigTagManager {
             subscribed.clear();
             pendingRequests.clear();
             online.clear();
+            answers.clear();
             scheduleRetry(now);
             return false;
         }

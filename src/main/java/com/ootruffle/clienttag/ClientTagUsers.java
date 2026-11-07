@@ -8,7 +8,10 @@ import com.ootruffle.clienttag.render.ClientIcon;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,12 +48,17 @@ public final class ClientTagUsers {
     private static final long TOKEN_REFRESH_MARGIN_MS = 60_000;
     private static final long MIN_BACKOFF_MS = 10_000;
     private static final long MAX_BACKOFF_MS = 300_000;
+    /** Spotted players are collected and sent at most this often, with the next heartbeat after it. */
+    private static final long SEEN_INTERVAL_MS = 300_000;
+    /** The server takes at most this many spotted players per sync. */
+    private static final int MAX_SEEN = 512;
 
     /** ClientTag users around us -> the clients they're really on (empty for plain Fabric/Ornithe). */
     private static final Map<UUID, Set<ClientIcon>> users = new ConcurrentHashMap<>();
     /** ClientTag users around us whose ClientTag icon is shown -> its color, set by the server's admin (white by default). */
     private static final Map<UUID, Integer> tagColors = new ConcurrentHashMap<>();
-    private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
+    private static final Answers answers = new Answers(0);
+    private static final AtomicReference<Snapshot> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-Server");
         thread.setDaemon(true);
@@ -69,8 +77,28 @@ public final class ClientTagUsers {
     private static long lastHeartbeat;
     private static long nextAttempt;
     private static long backoff = MIN_BACKOFF_MS;
+    /** Everyone spotted since the last batch went out, with every client they were seen on. */
+    private static final Map<UUID, Set<String>> pendingSeen = new LinkedHashMap<>();
+    /** When the first player of the current batch was spotted. */
+    private static long seenSince;
+
+    /** The players around us, and the clients we've spotted them on (see {@link #spotted}). */
+    private static final class Snapshot {
+        final Set<UUID> tracked;
+        final Map<UUID, List<String>> seen;
+
+        Snapshot(Set<UUID> tracked, Map<UUID, List<String>> seen) {
+            this.tracked = tracked;
+            this.seen = seen;
+        }
+    }
 
     private ClientTagUsers() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /**
      * The ClientTag icon color (RGB) for ClientTag users who chose to show it or aren't really on
@@ -111,13 +139,45 @@ public final class ClientTagUsers {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> tracked = new HashSet<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> tracked = new LinkedHashSet<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, self);
+        }
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
+        final Map<UUID, List<String>> seen = new HashMap<>();
+        if (ClientTagSettings.shareSeen()) {
+            for (UUID uuid : tracked) {
+                final List<String> ids = spotted(uuid);
+                if (ids != null) {
+                    seen.put(uuid, ids);
+                }
+            }
+        }
         // Coalesce: if the background thread is still busy, the newest snapshot wins.
-        if (pendingTracked.getAndSet(tracked) == null) {
+        if (pendingTracked.getAndSet(new Snapshot(tracked, seen)) == null) {
             EXECUTOR.execute(ClientTagUsers::sync);
         }
+    }
+
+    /**
+     * The clients we've seen a player on, for the ClientTag server's statistics. Null if we
+     * haven't seen them on any, or can't trust what we've seen yet: they run ClientTag (they
+     * report their own clients, and the other tags on them are ClientTag's doing), or the
+     * ClientTag server hasn't said yet whether they do.
+     */
+    private static List<String> spotted(UUID uuid) {
+        if (users.containsKey(uuid) || !hasAnswered(uuid)) {
+            return null;
+        }
+        final List<String> ids = new ArrayList<>();
+        for (ClientIcon icon : ClientIcon.values()) {
+            if (icon != ClientIcon.CLIENTTAG && icon != ClientIcon.FLAGGED && icon.reportedColor(uuid) != null) {
+                ids.add(icon.id());
+            }
+        }
+        return ids.isEmpty() ? null : ids;
     }
 
     private static void addTracked(Set<UUID> tracked, UUID uuid, UUID self) {
@@ -129,6 +189,7 @@ public final class ClientTagUsers {
     private static void changeServer(boolean nowActive) {
         active = nowActive;
         looked.clear();
+        answers.clear();
         users.clear();
         tagColors.clear();
         lastHeartbeat = 0;
@@ -144,16 +205,23 @@ public final class ClientTagUsers {
     }
 
     private static void sync() {
-        final Set<UUID> tracked = pendingTracked.getAndSet(null);
+        final Snapshot snapshot = pendingTracked.getAndSet(null);
         final long now = System.currentTimeMillis();
-        if (tracked == null || !active || now < nextAttempt) {
+        if (snapshot == null) {
             return;
         }
+        // Collected even while waiting to retry, so a short outage loses nothing.
+        collectSeen(snapshot.seen, now);
+        if (!active || now < nextAttempt) {
+            return;
+        }
+        final Set<UUID> tracked = snapshot.tracked;
 
         // Players who left are forgotten; new ones are looked up now, everyone on the heartbeat.
         looked.retainAll(tracked);
         users.keySet().retainAll(tracked);
         tagColors.keySet().retainAll(tracked);
+        answers.retain(tracked);
         final boolean heartbeat = now - lastHeartbeat >= HEARTBEAT_MS;
         final List<UUID> lookup = new ArrayList<>();
         for (UUID uuid : tracked) {
@@ -171,7 +239,20 @@ public final class ClientTagUsers {
                 token = PresenceApi.login(platform.sessionName(), SessionJoins::join);
                 LOGGER.info("Connected to the ClientTag server ({})", PresenceApi.URL);
             }
-            final PresenceApi.SyncResult found = PresenceApi.sync(token, ownClients(), ClientTagSettings.showOwnTag(), lookup);
+            // Turned off since they were collected: they're never sent.
+            if (!ClientTagSettings.shareSeen()) {
+                pendingSeen.clear();
+            }
+            // Spotted players go in one batch every SEEN_INTERVAL_MS, with a heartbeat rather than a request of their own.
+            final boolean sendSeen = heartbeat && !pendingSeen.isEmpty() && now - seenSince >= SEEN_INTERVAL_MS;
+            final Map<UUID, List<String>> seen = new LinkedHashMap<>();
+            if (sendSeen) {
+                pendingSeen.forEach((uuid, ids) -> seen.put(uuid, new ArrayList<>(ids)));
+            }
+            final PresenceApi.SyncResult found = PresenceApi.sync(token, ownClients(), ClientTagSettings.showOwnTag(), lookup, seen);
+            if (sendSeen) {
+                pendingSeen.clear();
+            }
             present = true;
             if (heartbeat) {
                 lastHeartbeat = now;
@@ -191,12 +272,31 @@ public final class ClientTagUsers {
                 }
             }
             looked.addAll(lookup);
+            answers.answered(lookup);
             backoff = MIN_BACKOFF_MS;
         } catch (PresenceApi.UnauthorizedException e) {
             token = null;
             retryLater(now, e);
         } catch (Exception e) {
             retryLater(now, e);
+        }
+    }
+
+    /** Adds what was just spotted to the batch waiting to be sent; a failed send keeps it for the next try. */
+    private static void collectSeen(Map<UUID, List<String>> seen, long now) {
+        for (Map.Entry<UUID, List<String>> entry : seen.entrySet()) {
+            Set<String> ids = pendingSeen.get(entry.getKey());
+            if (ids == null) {
+                if (pendingSeen.size() >= MAX_SEEN) {
+                    continue;
+                }
+                if (pendingSeen.isEmpty()) {
+                    seenSince = now;
+                }
+                ids = new LinkedHashSet<>();
+                pendingSeen.put(entry.getKey(), ids);
+            }
+            ids.addAll(entry.getValue());
         }
     }
 

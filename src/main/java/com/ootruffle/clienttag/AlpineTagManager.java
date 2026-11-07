@@ -7,7 +7,7 @@ import com.ootruffle.clienttag.platform.Platform;
 import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -44,12 +44,12 @@ public final class AlpineTagManager {
     private static final long LOOKUP_INTERVAL_MS = 5_000;
     private static final long SERVER_CHANGE_DELAY_MS = 15_000;
     private static final long AUTH_TIMEOUT_MS = 30_000;
-    private static final int MAX_LOGGED_LOOKUPS = 5;
     private static final long MIN_BACKOFF_MS = 10_000;
     private static final long MAX_BACKOFF_MS = 300_000;
     private static final long STABLE_CONNECTION_MS = 300_000;
 
     private static final Set<UUID> alpineUsers = ConcurrentHashMap.newKeySet();
+    private static final Answers answers = new Answers(0);
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-Alpine");
@@ -69,13 +69,16 @@ public final class AlpineTagManager {
     private static long connectedAt;
     private static long lookupsFrom;
     private static long lastLookup;
-    private static int loggedLookups;
-    private static final Set<UUID> answered = new HashSet<>();
     private static final Map<UUID, Integer> attempts = new HashMap<>();
     private static long nextConnectAttempt;
     private static long backoff = MIN_BACKOFF_MS;
 
     private AlpineTagManager() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /** The color of the player's Alpine indicator (RGB), or null if they're not on Alpine (or not known yet). */
     public static Integer getAlpineColor(UUID uuid) {
@@ -105,7 +108,11 @@ public final class AlpineTagManager {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> tracked = new HashSet<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> tracked = new LinkedHashSet<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, self);
+        }
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         // Coalesce: if the background thread is still busy (e.g. connecting), the newest snapshot wins.
@@ -181,7 +188,7 @@ public final class AlpineTagManager {
 
         final List<UUID> batch = new ArrayList<>();
         for (UUID uuid : tracked) {
-            if (!answered.contains(uuid) && attempts.getOrDefault(uuid, 0) < MAX_ATTEMPTS) {
+            if (!answers.has(uuid) && attempts.getOrDefault(uuid, 0) < MAX_ATTEMPTS) {
                 batch.add(uuid);
                 if (batch.size() == MAX_BATCH) {
                     break;
@@ -196,9 +203,6 @@ public final class AlpineTagManager {
         }
         socket.lookup(batch);
         lastLookup = now;
-        if (loggedLookups++ < MAX_LOGGED_LOOKUPS) {
-            LOGGER.info("Asked Alpine about {} players", batch.size());
-        }
     }
 
     private static void onLookup(UUID uuid, boolean alpineUser) {
@@ -206,7 +210,7 @@ public final class AlpineTagManager {
         if (!attempts.containsKey(uuid)) {
             return;
         }
-        answered.add(uuid);
+        answers.answered(uuid);
         if (alpineUser) {
             alpineUsers.add(uuid);
         } else {
@@ -228,7 +232,7 @@ public final class AlpineTagManager {
     }
 
     private static void forget() {
-        answered.clear();
+        answers.clear();
         attempts.clear();
         alpineUsers.clear();
     }

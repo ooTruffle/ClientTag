@@ -25,7 +25,7 @@ public final class Consent {
 
     private static final Logger LOGGER = LogManager.getLogger("ClientTag");
 
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static final int DELAY_SECONDS = 4;
     /** Ticks between attempts to put the in-game question back after something replaced it. */
     private static final int REOPEN_TICKS = 40;
@@ -39,7 +39,8 @@ public final class Consent {
             + "\n"
             + "ClientTag also tells the ClientTag server which client you're really on, so other ClientTag "
             + "users see your real tag. Anyone can look players up on that server - including those clients' "
-            + "developers - so it could be used to find ClientTag users. You can turn it off in /clienttag "
+            + "developers - so it could be used to find ClientTag users. It also tells the server which "
+            + "clients you've seen other players on, for its statistics. You can turn both off in /clienttag "
             + "(needs OneConfig).\n"
             + "\n"
             + "Enable ClientTag?";
@@ -130,7 +131,7 @@ public final class Consent {
                 + "# NoRiskClient, LabyMod, Alpine Client and PolyPlus services to show which client other\n"
                 + "# players use. This may break those services' terms of service and get your account banned or restricted.\n"
                 + "# It also tells the ClientTag server (clienttags.fluffykiwi.net) which client you're on,\n"
-                + "# and anyone can look players up there.\n"
+                + "# and anyone can look players up there, and which clients you've seen other players on.\n"
                 + "#\n"
                 + "# Set accepted=true to agree to this without the in-game prompt.\n"
                 + "accepted=" + accepted + "\n"

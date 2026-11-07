@@ -9,6 +9,7 @@ import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,6 +48,7 @@ public final class LabyModTagManager {
 
     /** LabyMod users -> their visible role (0 = none). */
     private static final Map<UUID, Integer> users = new ConcurrentHashMap<>();
+    private static final Answers answers = new Answers(3_000);
     private static final AtomicReference<Map<UUID, String>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-LabyMod-Sync");
@@ -70,6 +72,11 @@ public final class LabyModTagManager {
     private static long backoff = MIN_BACKOFF_MS;
 
     private LabyModTagManager() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /** The LabyMod indicator color (RGB), or null if they're not on LabyMod (or it's not known yet). */
     public static Integer getLabyModColor(UUID uuid) {
@@ -106,7 +113,11 @@ public final class LabyModTagManager {
 
         // UUID -> base64 textures property (or null), for the skin/cape IDs LabyMod sends along.
         final UUID self = platform.localPlayerId();
-        final Map<UUID, String> tracked = new HashMap<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Map<UUID, String> tracked = new LinkedHashMap<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, null, self);
+        }
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, textures, self));
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, textures, self));
         // Coalesce: if the background thread is still busy (e.g. connecting), the newest snapshot wins.
@@ -117,6 +128,11 @@ public final class LabyModTagManager {
 
     private static void addTracked(Map<UUID, String> tracked, UUID uuid, String textures, UUID self) {
         // Real accounts have v4 UUIDs; LabyMod leaves NPCs and offline players out too.
+        if (uuid != null && textures != null && tracked.containsKey(uuid) && tracked.get(uuid) == null) {
+            // Added as a /clienttag who player before their skin was known.
+            tracked.put(uuid, textures);
+            return;
+        }
         if (uuid == null || uuid.version() != 4 || uuid.equals(self) || tracked.containsKey(uuid)
                 || tracked.size() >= MAX_TRACKED || ClientTagUsers.hides(uuid, ClientIcon.LABYMOD)) {
             return;
@@ -132,6 +148,7 @@ public final class LabyModTagManager {
         }
         viewport.clear();
         users.clear();
+        answers.clear();
     }
 
     private static void sync() {
@@ -148,13 +165,16 @@ public final class LabyModTagManager {
         }
         removed.forEach(viewport::remove);
         removed.forEach(users::remove);
+        answers.forget(removed);
 
         final List<LabyConnectSocket.ViewportPlayer> added = new ArrayList<>();
+        final List<UUID> addedIds = new ArrayList<>();
         for (Map.Entry<UUID, String> entry : tracked.entrySet()) {
             if (!viewport.containsKey(entry.getKey())) {
                 final LabyConnectSocket.ViewportPlayer player = LabyConnectSocket.ViewportPlayer.of(entry.getKey(), entry.getValue());
                 viewport.put(entry.getKey(), player);
                 added.add(player);
+                addedIds.add(entry.getKey());
             }
         }
 
@@ -165,6 +185,8 @@ public final class LabyModTagManager {
         } else if (!added.isEmpty() || !removed.isEmpty()) {
             socket.sendViewport(false, added, removed);
         }
+        // LabyMod may only send data for its users, so silence soon after this means "not on LabyMod".
+        answers.asked(addedIds);
     }
 
     private static void onUserData(UUID player, boolean usingLabyMod, int roleId) {
@@ -173,6 +195,9 @@ public final class LabyModTagManager {
             users.put(player, roleId);
         } else {
             users.remove(player);
+        }
+        if (viewport.containsKey(player)) {
+            answers.answered(player);
         }
     }
 
@@ -185,6 +210,7 @@ public final class LabyModTagManager {
         }
         viewport.clear();
         users.clear();
+        answers.clear();
     }
 
     private static boolean ensureConnected() {
@@ -201,6 +227,7 @@ public final class LabyModTagManager {
             socket = null;
             viewport.clear();
             users.clear();
+            answers.clear();
             if (reason != null && reason.contains("server_restart") && now - connectedAt >= STABLE_CONNECTION_MS) {
                 // A planned restart: come back shortly, the way LabyMod does. Only after a connection
                 // that held, though - every reconnect costs a Mojang join, and repeated restarts back off.
