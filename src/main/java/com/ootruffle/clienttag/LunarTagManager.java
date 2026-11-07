@@ -34,6 +34,9 @@ import org.apache.logging.log4j.Logger;
  * <p>
  * All socket work runs on one background thread - the client thread only snapshots the
  * player list and never waits on the network.
+ * <p>
+ * Players asked about with {@code /clienttag who} (see {@link WhoCommand#wanted}) count as in
+ * view until it has answered, so they're looked up even from across the map.
  */
 public final class LunarTagManager {
 
@@ -46,6 +49,7 @@ public final class LunarTagManager {
     private static final long STABLE_CONNECTION_MS = 300_000;
 
     private static final Map<UUID, Integer> lunarColors = new ConcurrentHashMap<>();
+    private static final Answers answers = new Answers(0);
     private static final AtomicReference<Set<UUID>> pendingVisible = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag");
@@ -80,6 +84,11 @@ public final class LunarTagManager {
         return color == null || ClientTagUsers.hides(uuid, ClientIcon.LUNAR) ? null : color;
     }
 
+    /** Whether Lunar has said if this player is on it, since we joined this server. */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
+
     public static void onClientTick() {
         final Platform platform = Platform.get();
         // Turned off in the settings: leave the server as far as this client knows, then disconnect.
@@ -103,17 +112,22 @@ public final class LunarTagManager {
 
         final UUID self = platform.localPlayerId();
         final Set<UUID> visible = new HashSet<>();
-        platform.forEachWorldPlayer((uuid, textures) -> {
-            // Real accounts have v4 UUIDs; server-side NPCs (v2 on Hypixel) can't be Lunar users.
-            // The real client never looks itself up either. ClientTag users who aren't really
-            // on Lunar would show up as Lunar users, since ClientTag logs them in.
-            if (uuid.version() == 4 && !uuid.equals(self) && !ClientTagUsers.hides(uuid, ClientIcon.LUNAR)) {
-                visible.add(uuid);
-            }
-        });
+        platform.forEachWorldPlayer((uuid, textures) -> addVisible(visible, uuid, self));
+        for (UUID uuid : WhoCommand.wanted()) {
+            addVisible(visible, uuid, self);
+        }
         // Coalesce: if the background thread is still busy (e.g. connecting), the newest snapshot wins.
         if (pendingVisible.getAndSet(visible) == null) {
             EXECUTOR.execute(LunarTagManager::sync);
+        }
+    }
+
+    private static void addVisible(Set<UUID> visible, UUID uuid, UUID self) {
+        // Real accounts have v4 UUIDs; server-side NPCs (v2 on Hypixel) can't be Lunar users.
+        // The real client never looks itself up either. ClientTag users who aren't really
+        // on Lunar would show up as Lunar users, since ClientTag logs them in.
+        if (uuid.version() == 4 && !uuid.equals(self) && !ClientTagUsers.hides(uuid, ClientIcon.LUNAR)) {
+            visible.add(uuid);
         }
     }
 
@@ -125,6 +139,7 @@ public final class LunarTagManager {
         }
         subscribed.clear();
         lunarColors.clear();
+        answers.clear();
         locationReported = false;
         hostname = address == null ? null : parseHostname(address);
         reportedHost = null;
@@ -142,19 +157,8 @@ public final class LunarTagManager {
 
     private static void sync() {
         final Set<UUID> visible = pendingVisible.getAndSet(null);
-        if (visible == null || hostname == null || !ensureConnected()) {
+        if (visible == null || hostname == null || !ready()) {
             return;
-        }
-        if (!locationReported) {
-            try {
-                socket.reportLocation(reportedHost, location);
-                locationReported = true;
-                LOGGER.info("Reported location {} as {} (connected via {})", location, reportedHost, hostname);
-            } catch (Exception e) {
-                LOGGER.warn("Couldn't report server location to Lunar: {}", e.toString());
-                socket.close();
-                return;
-            }
         }
 
         final List<UUID> removed = new ArrayList<>();
@@ -179,6 +183,25 @@ public final class LunarTagManager {
         }
     }
 
+    /** Connects and reports which server we're on if needed; whether players can be looked up now. */
+    private static boolean ready() {
+        if (!ensureConnected()) {
+            return false;
+        }
+        if (!locationReported) {
+            try {
+                socket.reportLocation(reportedHost, location);
+                locationReported = true;
+                LOGGER.info("Reported location {} as {} (connected via {})", location, reportedHost, hostname);
+            } catch (Exception e) {
+                LOGGER.warn("Couldn't report server location to Lunar: {}", e.toString());
+                socket.close();
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static void lookup(List<UUID> batch) {
         final int gen = generation;
         socket.subscribe(batch).whenComplete((entries, error) -> {
@@ -198,6 +221,7 @@ public final class LunarTagManager {
             for (LunarSocket.Entry entry : entries) {
                 lunarColors.put(entry.uuid, entry.color);
             }
+            answers.answered(batch);
             LOGGER.debug("SubscribeV2: asked about {} players, {} on Lunar ({} known this server)",
                     batch.size(), entries.size(), lunarColors.size());
         });
@@ -212,6 +236,7 @@ public final class LunarTagManager {
         }
         subscribed.clear();
         lunarColors.clear();
+        answers.clear();
     }
 
     private static boolean ensureConnected() {

@@ -9,6 +9,7 @@ import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,6 +46,7 @@ public final class DawnTagManager {
     private static final long STABLE_CONNECTION_MS = 300_000;
 
     private static final Map<UUID, Integer> dawnColors = new ConcurrentHashMap<>();
+    private static final Answers answers = new Answers(3_000);
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-Dawn");
@@ -69,6 +71,11 @@ public final class DawnTagManager {
     private static long backoff = MIN_BACKOFF_MS;
 
     private DawnTagManager() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /** The player's Dawn logo color (RGB), or null if they're not on Dawn (or not known yet). */
     public static Integer getDawnColor(UUID uuid) {
@@ -100,7 +107,11 @@ public final class DawnTagManager {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> tracked = new HashSet<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> tracked = new LinkedHashSet<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, self);
+        }
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         // Coalesce: if the background thread is still busy (e.g. connecting), the newest snapshot wins.
@@ -125,6 +136,7 @@ public final class DawnTagManager {
         sent.clear();
         dawnIds.clear();
         dawnColors.clear();
+        answers.clear();
     }
 
     private static void sync() {
@@ -146,6 +158,7 @@ public final class DawnTagManager {
         }
         sent.removeAll(removed);
         removed.forEach(dawnColors::remove);
+        answers.forget(removed);
 
         final List<UUID> added = new ArrayList<>();
         if (now - lastResync >= RESYNC_MS) {
@@ -160,6 +173,8 @@ public final class DawnTagManager {
             }
         }
         sendTrack(added, removed);
+        // Dawn only sends snapshots for its users, so silence soon after this means "not on Dawn".
+        answers.asked(added);
     }
 
     /** Sends add/remove lists in frames of at most 100 UUIDs. */
@@ -176,6 +191,7 @@ public final class DawnTagManager {
     private static void onSubscribed() {
         // A fresh subscription knows nothing - send everything again on the next sync.
         sent.clear();
+        answers.clear();
         lastResync = System.currentTimeMillis();
         LOGGER.info("Subscribed to Dawn players.tracked");
     }
@@ -194,6 +210,9 @@ public final class DawnTagManager {
             dawnColors.remove(mcUuid);
         } else {
             dawnColors.put(mcUuid, color);
+        }
+        if (sent.contains(mcUuid)) {
+            answers.answered(mcUuid);
         }
     }
 
@@ -231,6 +250,7 @@ public final class DawnTagManager {
         sent.clear();
         dawnIds.clear();
         dawnColors.clear();
+        answers.clear();
     }
 
     private static boolean ensureConnected() {
@@ -251,6 +271,7 @@ public final class DawnTagManager {
             socket = null;
             sent.clear();
             dawnColors.clear();
+            answers.clear();
             scheduleRetry(now);
             return false;
         }

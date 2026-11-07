@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /**
@@ -95,6 +96,51 @@ public final class ProtoMessage {
             }
         }
         return out;
+    }
+
+    /** Every length-delimited value, in field number order. */
+    public List<byte[]> allBytes() {
+        final List<byte[]> out = new ArrayList<>();
+        new TreeMap<>(fields).values().forEach(values -> {
+            for (Object v : values) {
+                if (v instanceof byte[]) {
+                    out.add((byte[]) v);
+                }
+            }
+        });
+        return out;
+    }
+
+    /**
+     * The layout for logs: field numbers, numbers as-is, and byte fields by length
+     * (plus their own layout when they parse as a message). Never the bytes themselves,
+     * which may hold a token.
+     */
+    public String describe() {
+        final StringBuilder out = new StringBuilder("{");
+        new TreeMap<>(fields).forEach((field, values) -> {
+            for (Object v : values) {
+                if (out.length() > 1) {
+                    out.append(", ");
+                }
+                out.append(field).append(": ");
+                if (v instanceof byte[]) {
+                    final byte[] b = (byte[]) v;
+                    out.append(b.length).append(" bytes");
+                    try {
+                        final ProtoMessage nested = parse(b);
+                        if (!nested.fields.isEmpty()) {
+                            out.append(' ').append(nested.describe());
+                        }
+                    } catch (RuntimeException ignored) {
+                        // Not a message.
+                    }
+                } else {
+                    out.append(v);
+                }
+            }
+        });
+        return out.append('}').toString();
     }
 
     /** Reads this message as a { 1: fixed64 msb, 2: fixed64 lsb } UUID. */

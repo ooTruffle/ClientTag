@@ -6,7 +6,7 @@ import com.ootruffle.clienttag.platform.Platform;
 import com.ootruffle.clienttag.render.ClientIcon;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,6 +47,7 @@ public final class CosmeticaTagManager {
     private static final long MAX_BACKOFF_MS = 300_000;
 
     private static final Set<UUID> online = ConcurrentHashMap.newKeySet();
+    private static final Answers answers = new Answers(0);
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-Cosmetica");
@@ -67,6 +68,11 @@ public final class CosmeticaTagManager {
     private static long backoff = MIN_BACKOFF_MS;
 
     private CosmeticaTagManager() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /** The player's Cosmetica indicator color (RGB), or null if they're not online on Cosmetica (or not known yet). */
     public static Integer getCosmeticaColor(UUID uuid) {
@@ -90,7 +96,11 @@ public final class CosmeticaTagManager {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> tracked = new HashSet<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> tracked = new LinkedHashSet<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, self);
+        }
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         // Coalesce: if the background thread is still busy, the newest snapshot wins.
@@ -110,6 +120,7 @@ public final class CosmeticaTagManager {
         active = nowActive;
         nextCheck.clear();
         online.clear();
+        answers.clear();
     }
 
     private static void sync() {
@@ -120,6 +131,7 @@ public final class CosmeticaTagManager {
         // Players who left are forgotten.
         nextCheck.keySet().retainAll(tracked);
         online.retainAll(tracked);
+        answers.retain(tracked);
 
         final long now = System.currentTimeMillis();
         if (now < nextAttempt) {
@@ -151,6 +163,7 @@ public final class CosmeticaTagManager {
             } else {
                 online.remove(uuid);
             }
+            answers.answered(uuid);
         }
     }
 

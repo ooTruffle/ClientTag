@@ -4,6 +4,7 @@ import com.ootruffle.clienttag.AlpineTagManager;
 import com.ootruffle.clienttag.ClientTagUsers;
 import com.ootruffle.clienttag.CosmeticaTagManager;
 import com.ootruffle.clienttag.DawnTagManager;
+import com.ootruffle.clienttag.DebugTags;
 import com.ootruffle.clienttag.EssentialTagManager;
 import com.ootruffle.clienttag.LabyModTagManager;
 import com.ootruffle.clienttag.LocalFlags;
@@ -21,6 +22,7 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Every client ClientTag knows about, in their default left-to-right drawing order (users can
@@ -46,12 +48,14 @@ public enum ClientIcon {
             .color(OneConfigCompat::getBadgeColor)
             .art(IconArt.image("/assets/clienttag/textures/polyplus_badge.png"))
             .tick(OneConfigTagManager::onClientTick)
+            .answered(OneConfigTagManager::hasAnswered)
             .config("polyPlus", "PolyPlus mod not installed")
             .runningWhen(OneConfigCompat::isInstalled)),
     LUNAR(new Spec("lunar", "Lunar Client", '\uE001')
             .color(LunarTagManager::getLunarColor)
             .art(IconArt::crescent)
             .tick(LunarTagManager::onClientTick)
+            .answered(LunarTagManager::hasAnswered)
             .config("lunar", "Not running on Lunar Client")
             // Lunar loads mods through its own Ichor loader without registering a mod ID, but its
             // launcher (genesis) is on the classpath of every version it runs. These names survive its obfuscation.
@@ -61,47 +65,58 @@ public enum ClientIcon {
             .color(DawnTagManager::getDawnColor)
             .art(IconArt::sunrise)
             .tick(DawnTagManager::onClientTick)
+            .answered(DawnTagManager::hasAnswered)
             .config("dawn", "Not running on Dawn Client")
             // Dawn is the former Feather Client and still ships Feather's entrypoint, which is the fallback.
             .runningWhen(() -> NativeClients.isDawnClient()
                     || NativeClients.anyClass("net/digitalingot/feather/FeatherMod.class"))),
     ESSENTIAL(new Spec("essential", "Essential", '\uE003')
             .color(EssentialTagManager::getEssentialColor)
+            .preview(0x47A3FF)
             .art(IconArt::sparkle)
             .tick(EssentialTagManager::onClientTick)
+            .answered(EssentialTagManager::hasAnswered)
             .config("essential", "Essential not installed")
             // Essential's loader stub registers as a mod, while the real mod is downloaded and loaded later.
             .runningWhen(() -> NativeClients.anyMod("essential", "essential-container")
                     || NativeClients.anyClass("gg/essential/Essential.class"))),
     NORISK(new Spec("norisk", "NoRiskClient", '\uE004')
             .color(NoRiskTagManager::getNoRiskColor)
+            .preview(0xFF5A5A)
             .art(IconArt::shield)
             .tick(NoRiskTagManager::onClientTick)
+            .answered(NoRiskTagManager::hasAnswered)
             .config("noRisk", "Not running on NoRiskClient")
             .runningWhen(() -> NativeClients.anyMod("nrcclient")
                     || NativeClients.anyClass("gg/norisk/client/bootstrap/ClientBootstrap.class"))),
     LABYMOD(new Spec("labymod", "LabyMod", '\uE005')
             .color(LabyModTagManager::getLabyModColor)
+            .preview(0xD8D8D8)
             .art(IconArt::wolf)
             .tick(LabyModTagManager::onClientTick)
+            .answered(LabyModTagManager::hasAnswered)
             .config("labyMod", "Not running on LabyMod")
             .runningWhen(() -> NativeClients.anyMod("labymod") || NativeClients.anyClass("net/labymod/api/Laby.class"))),
     COSMETICA(new Spec("cosmetica", "Cosmetica", '\uE007')
             .color(CosmeticaTagManager::getCosmeticaColor)
             .art(IconArt.image("/assets/clienttag/textures/cosmetica_halo.png"))
             .tick(CosmeticaTagManager::onClientTick)
+            .answered(CosmeticaTagManager::hasAnswered)
             .config("cosmetica", "Cosmetica not installed")
             .runningWhen(() -> NativeClients.anyMod("cosmetica"))),
     ALPINE(new Spec("alpine", "Alpine Client", '\uE009')
             .color(AlpineTagManager::getAlpineColor)
+            .preview(0x4FD1C5)
             .art(IconArt::mountain)
             .tick(AlpineTagManager::onClientTick)
+            .answered(AlpineTagManager::hasAnswered)
             .config("alpine", "Not running on Alpine Client")
             .runningWhen(NativeClients::isAlpineClient)),
     // ClientTag is never "running natively" from its own point of view, and ClientTagUsers is
     // ticked by ClientTag itself, since it also tells the other managers who to hide.
     CLIENTTAG(new Spec("clienttag", "ClientTag", '\uE006')
             .color(ClientTagUsers::getClientTagColor)
+            .answered(uuid -> !ClientTagSettings.useServer() || ClientTagUsers.hasAnswered(uuid))
             .art(IconArt::nametag)
             .config("clientTag", null)),
     // Not a client: a warning triangle for players the user flagged themselves (see LocalFlags).
@@ -138,8 +153,10 @@ public enum ClientIcon {
         private final String displayName;
         private final char glyph;
         private Function<UUID, Integer> colorLookup;
+        private int previewColor = 0xFFFFFF;
         private Consumer<int[]> painter;
         private Runnable ticker;
+        private Predicate<UUID> answered = uuid -> true;
         private BooleanSupplier running;
         private String configKey;
         private String notRunningLabel;
@@ -153,6 +170,18 @@ public enum ClientIcon {
         /** The player's indicator color (RGB), or null if they're not on the client. */
         Spec color(Function<UUID, Integer> colorLookup) {
             this.colorLookup = colorLookup;
+            return this;
+        }
+
+        /** The color (RGB) to show the icon in for a {@link DebugTags} player its client knows nothing about; white by default. */
+        Spec preview(int previewColor) {
+            this.previewColor = previewColor;
+            return this;
+        }
+
+        /** Whether the client has said if a player is on it yet; by default it always knows. */
+        Spec answered(Predicate<UUID> answered) {
+            this.answered = answered;
             return this;
         }
 
@@ -200,8 +229,10 @@ public enum ClientIcon {
     private final String displayName;
     private final char glyph;
     private final Function<UUID, Integer> colorLookup;
+    private final int previewColor;
     private final Consumer<int[]> painter;
     private final Runnable ticker;
+    private final Predicate<UUID> answered;
     private final BooleanSupplier running;
     private final String configKey;
     private final String notRunningLabel;
@@ -211,8 +242,10 @@ public enum ClientIcon {
         this.displayName = spec.displayName;
         this.glyph = spec.glyph;
         this.colorLookup = spec.colorLookup;
+        this.previewColor = spec.previewColor;
         this.painter = spec.painter;
         this.ticker = spec.ticker;
+        this.answered = spec.answered;
         this.running = spec.running;
         this.configKey = spec.configKey;
         this.notRunningLabel = spec.notRunningLabel;
@@ -224,7 +257,14 @@ public enum ClientIcon {
         if (uuid == null) {
             return icons;
         }
+        final boolean debug = DebugTags.isShown(uuid);
         for (ClientIcon icon : ClientTagSettings.iconOrder()) {
+            // A debug player gets every client, even ones that are off; the flag stays real.
+            if (debug && icon != FLAGGED) {
+                final Integer color = icon.reportedColor(uuid);
+                icons.add(new Tinted(icon, ClientTagSettings.color(icon, color != null ? color : icon.previewColor)));
+                continue;
+            }
             if (!ClientTagSettings.isEnabled(icon)) {
                 continue;
             }
@@ -242,6 +282,11 @@ public enum ClientIcon {
      */
     public Integer reportedColor(UUID uuid) {
         return colorLookup.apply(uuid);
+    }
+
+    /** Whether this client has said if the player is on it, since we joined this server (see {@link com.ootruffle.clienttag.WhoCommand}). */
+    public boolean hasAnswered(UUID uuid) {
+        return answered.test(uuid);
     }
 
     /** The icon with this {@link #displayName()}, or null. */
