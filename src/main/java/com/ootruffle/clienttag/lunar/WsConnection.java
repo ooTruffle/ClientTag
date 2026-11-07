@@ -4,7 +4,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
+import java.net.http.WebSocketHandshakeException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Map;
@@ -45,6 +47,12 @@ final class WsConnection implements WebSocket.Listener {
         try {
             conn.ws = builder.buildAsync(URI.create(url), conn).get(15, TimeUnit.SECONDS);
         } catch (Exception e) {
+            // The JDK's handshake exception has no message; the status code is what says why.
+            if (e.getCause() instanceof WebSocketHandshakeException) {
+                final HttpResponse<?> response = ((WebSocketHandshakeException) e.getCause()).getResponse();
+                throw new IOException("couldn't open " + url + ": HTTP " + response.statusCode()
+                        + response.headers().firstValue("cf-mitigated").map(v -> " (Cloudflare " + v + ")").orElse(""), e);
+            }
             throw new IOException("couldn't open " + url + ": " + e, e);
         }
         conn.sendChain = CompletableFuture.completedFuture(conn.ws);
