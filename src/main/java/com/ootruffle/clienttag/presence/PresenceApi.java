@@ -25,8 +25,8 @@ import net.fabricmc.loader.api.FabricLoader;
  * they're really playing on, and ask it about the players around them.
  * <ul>
  *     <li>{@code POST /v1/login} { name, serverId } -> { token, expiresIn }, after a Mojang session server join with serverId</li>
- *     <li>{@code POST /v1/sync} { clients, showTag, lookup } -> { users: { uuid: [client ids] }, tags: { uuid: rgb } },
- *     refreshes our own presence</li>
+ *     <li>{@code POST /v1/sync} { clients, showTag, lookup, seen? } -> { users: { uuid: [client ids] }, tags: { uuid: rgb } },
+ *     refreshes our own presence; {@code seen} ({ uuid: [client ids] }) is who we've spotted on which client</li>
  *     <li>{@code POST /v1/leave} -> drops our presence right away</li>
  * </ul>
  * The server is {@value #DEFAULT_URL} unless {@code -Dclienttag.server=<url>} says otherwise.
@@ -99,8 +99,11 @@ public final class PresenceApi {
      * Refreshes our presence as a user of {@code clients} (asking for our ClientTag icon to be
      * shown to others if {@code showTag}) and returns which of {@code lookup} are ClientTag users,
      * with the clients they're really on and the color of their ClientTag icon if it's shown.
+     * {@code seen} is the clients we've spotted other players on (only players seen on at least one), for
+     * the server's statistics.
      */
-    public static SyncResult sync(Token token, Collection<String> clients, boolean showTag, Collection<UUID> lookup) throws IOException {
+    public static SyncResult sync(Token token, Collection<String> clients, boolean showTag, Collection<UUID> lookup,
+                                  Map<UUID, List<String>> seen) throws IOException {
         final JsonObject body = new JsonObject();
         final JsonArray clientArray = new JsonArray();
         // add(JsonPrimitive), not add(String): 1.8.9 ships Gson 2.2.4.
@@ -110,6 +113,15 @@ public final class PresenceApi {
         final JsonArray lookupArray = new JsonArray();
         lookup.forEach(uuid -> lookupArray.add(new JsonPrimitive(uuid.toString())));
         body.add("lookup", lookupArray);
+        if (!seen.isEmpty()) {
+            final JsonObject seenObject = new JsonObject();
+            for (Map.Entry<UUID, List<String>> entry : seen.entrySet()) {
+                final JsonArray ids = new JsonArray();
+                entry.getValue().forEach(id -> ids.add(new JsonPrimitive(id)));
+                seenObject.add(entry.getKey().toString(), ids);
+            }
+            body.add("seen", seenObject);
+        }
 
         final JsonObject response = post("/v1/sync", token, body);
         final SyncResult result = new SyncResult();

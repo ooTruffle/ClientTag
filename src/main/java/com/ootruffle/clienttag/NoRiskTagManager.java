@@ -12,6 +12,7 @@ import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -67,6 +68,7 @@ public final class NoRiskTagManager {
     private static final long STABLE_CONNECTION_MS = 300_000;
 
     private static final Map<UUID, Integer> noRiskColors = new ConcurrentHashMap<>();
+    private static final Answers answers = new Answers(0);
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-NoRisk");
@@ -96,6 +98,11 @@ public final class NoRiskTagManager {
     private static long lastSummary;
 
     private NoRiskTagManager() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /** The player's NoRisk indicator color (RGB), or null if they're not on NoRisk (or not known yet). */
     public static Integer getNoRiskColor(UUID uuid) {
@@ -127,7 +134,11 @@ public final class NoRiskTagManager {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> tracked = new HashSet<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> tracked = new LinkedHashSet<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, self);
+        }
         // Tab list first, like the real client; world players fill whatever room is left.
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
@@ -153,6 +164,7 @@ public final class NoRiskTagManager {
         subscribed.clear();
         restCheckedAt.clear();
         noRiskColors.clear();
+        answers.clear();
     }
 
     private static void sync() {
@@ -174,6 +186,7 @@ public final class NoRiskTagManager {
         if (!removed.isEmpty()) {
             subscribed.removeAll(removed);
             removed.forEach(noRiskColors::remove);
+            answers.forget(removed);
             updateSubscription(removed, false);
         }
 
@@ -218,6 +231,9 @@ public final class NoRiskTagManager {
         } else {
             noRiskColors.put(player, color);
         }
+        if (subscribed.contains(player)) {
+            answers.answered(player);
+        }
     }
 
     /** Indicator color for a {@code NoRiskUserMinimal}: staff/special icons first, then NoRisk+. */
@@ -241,6 +257,7 @@ public final class NoRiskTagManager {
     private static void restFallback(Set<UUID> tracked) {
         restCheckedAt.keySet().retainAll(tracked);
         noRiskColors.keySet().retainAll(tracked);
+        answers.retain(tracked);
         if (token == null || !token.isValid(TOKEN_REFRESH_MARGIN_MS)) {
             return;
         }
@@ -272,6 +289,7 @@ public final class NoRiskTagManager {
                     if (!online.contains(uuid)) {
                         noRiskColors.remove(uuid);
                     }
+                    answers.answered(uuid);
                 }
             } catch (Exception e) {
                 LOGGER.warn("NoRisk online lookup failed: {}", e.toString());
@@ -294,6 +312,7 @@ public final class NoRiskTagManager {
         subscribed.clear();
         restCheckedAt.clear();
         noRiskColors.clear();
+        answers.clear();
     }
 
     private static boolean ensureConnected() {
@@ -316,6 +335,7 @@ public final class NoRiskTagManager {
             }
             socket = null;
             subscribed.clear();
+            answers.clear();
             scheduleRetry(now);
             return false;
         }
@@ -335,6 +355,7 @@ public final class NoRiskTagManager {
             // The socket's live data replaces whatever REST found.
             restCheckedAt.clear();
             noRiskColors.clear();
+            answers.clear();
             LOGGER.info("Connected to NoRisk");
             return true;
         } catch (Exception e) {

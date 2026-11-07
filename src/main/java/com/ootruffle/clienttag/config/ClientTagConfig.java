@@ -52,6 +52,9 @@ public final class ClientTagConfig extends Config {
     @Switch(title = "Show My ClientTag Icon", description = "Show other ClientTag users a ClientTag icon by your name, next to the icon of the client you're on. It's always shown when you're on none.", subcategory = "ClientTag Server")
     public boolean showOwnTag = true;
 
+    @Switch(title = "Share Spotted Clients", description = "Tell the ClientTag server which clients you've seen other players on, for its statistics of which clients people use.", subcategory = "ClientTag Server")
+    public boolean shareSeen = true;
+
     @Switch(title = "Show Lunar Client", category = "Lunar Client")
     public boolean lunarEnabled = true;
     @Switch(title = "Custom Color", description = "Use one color for everyone instead of the color Lunar reports.", category = "Lunar Client")
@@ -135,6 +138,7 @@ public final class ClientTagConfig extends Config {
             loadFrom(folder.resolve("lunertag.json"));
         }
         hideIf("showOwnTag", () -> !useServer);
+        hideIf("shareSeen", () -> !useServer);
         for (ClientIcon icon : ClientIcon.values()) {
             final String key = icon.configKey();
             hideIf(key + "Color", () -> !Options.of(icon).customColor(this));
