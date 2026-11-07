@@ -10,3 +10,5 @@ server/.env
 server/ecosystem.config.cjs
 server/node_modules/
 server/players.json
+server/history.json
+server/seen.json

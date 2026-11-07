@@ -38,6 +38,9 @@
   td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   td.ua { font-family: ui-monospace, monospace; font-size: 12.5px; word-break: break-all; }
   td.time { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+  td.clients { min-width: 140px; }
+  td.clients > div { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  td.clients .client { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
   .chip { display: inline-block; padding: 1px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); margin: 0 6px 6px 0; }
   .ours { color: var(--accent); }
   .s2 { color: var(--ok); } .s4 { color: var(--warn); } .s5 { color: var(--bad); }
@@ -49,6 +52,38 @@
   input[type=color] { width: 34px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; cursor: pointer; }
   button { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: inherit; cursor: pointer; }
   button:disabled { opacity: .4; cursor: default; }
+  button[aria-pressed=true] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  /* One fixed color per client, so a client keeps its color whatever is shown. */
+  :root {
+    --c-lunar: #2a78d6; --c-essential: #eb6834; --c-labymod: #1baf7a; --c-norisk: #eda100;
+    --c-polyplus: #e87ba4; --c-dawn: #008300; --c-alpine: #6250d6; --c-cosmetica: #e34948; --c-none: #8a8a94;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --c-lunar: #3987e5; --c-essential: #d95926; --c-labymod: #199e70; --c-norisk: #c98500;
+      --c-polyplus: #d55181; --c-dawn: #008300; --c-alpine: #9085e9; --c-cosmetica: #e66767; --c-none: #7a7a86;
+    }
+  }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: 280px; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .axis { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .chart .empty { fill: var(--muted); font-size: 13px; }
+  .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+         padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; display: none; z-index: 2; }
+  .tip .row { display: flex; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
+  .tip .row b { margin-left: auto; padding-left: 12px; font-weight: 600; }
+  .key { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .legend button { display: inline-flex; gap: 6px; align-items: center; }
+  .legend button.off { opacity: .45; }
+  .legend button.off .key { background: transparent !important; outline: 1.5px solid var(--muted); outline-offset: -1.5px; }
+  .bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 10px; align-items: center; }
+  .bars .track { height: 14px; }
+  .bars .fill { height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bars .num { font-variant-numeric: tabular-nums; text-align: right; }
 </style>
 </head>
 <body>
@@ -61,7 +96,9 @@
 
   <div class="tiles">
     <div class="tile"><div class="muted">Live users</div><div class="value" id="live">–</div></div>
+    <div class="tile"><div class="muted" title="Spotted players from the latest batches, which the mod sends every 5 minutes">Players spotted (last 5 min)</div><div class="value" id="seenLive">–</div></div>
     <div class="tile"><div class="muted">Known players</div><div class="value" id="playerCount">–</div></div>
+    <div class="tile"><div class="muted">Players ever spotted</div><div class="value" id="seenPlayers">–</div></div>
     <div class="tile"><div class="muted">Signed-in tokens</div><div class="value" id="tokens">–</div></div>
     <div class="tile"><div class="muted">User agents</div><div class="value" id="agentCount">–</div></div>
     <div class="tile"><div class="muted">Uptime</div><div class="value" id="uptime">–</div></div>
@@ -74,13 +111,48 @@
 
   <section>
     <div class="bar">
+      <h2>Clients over time</h2>
+      <span class="muted" id="historyNote"></span>
+      <span id="whos">
+        <button data-who="users" aria-pressed="true" title="ClientTag users, by the client they say they're on">ClientTag users</button>
+        <button data-who="seen" aria-pressed="false" title="Everyone else, by the tags ClientTag users spotted on them">Spotted players</button>
+      </span>
+      <span id="ranges">
+        <button data-range="day" aria-pressed="true">Day</button>
+        <button data-range="week" aria-pressed="false">Week</button>
+        <button data-range="month" aria-pressed="false">Month</button>
+        <button data-range="all" aria-pressed="false">90 days</button>
+      </span>
+    </div>
+    <div class="chart" id="historyChart"><div class="tip" id="historyTip"></div></div>
+    <div class="legend" id="historyLegend"></div>
+  </section>
+
+  <section>
+    <div class="bar">
+      <h2>Players who have used each client</h2>
+      <span class="muted">Every known player, counted once for each client they've reported. "none" is ClientTag on its own.</span>
+    </div>
+    <div class="bars" id="everUsed"><span class="muted">No data yet</span></div>
+  </section>
+
+  <section>
+    <div class="bar">
+      <h2>Spotted players on each client</h2>
+      <span class="muted">Every player ClientTag users have seen (not ClientTag users themselves), counted once for each client they were spotted on. Players seen on none aren't counted.</span>
+    </div>
+    <div class="bars" id="everSeen"><span class="muted">No data yet</span></div>
+  </section>
+
+  <section>
+    <div class="bar">
       <h2>Players</h2>
       <span class="muted">ClientTag icon color, shown to other ClientTag users within ~30 s. White unless set.</span>
       <input type="search" id="playerFilter" placeholder="Filter by name or UUID">
     </div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Player</th><th>UUID</th><th>Icon shown</th><th>Color</th><th>First seen</th><th>Last login</th></tr></thead>
+        <thead><tr><th>Player</th><th>UUID</th><th>Client</th><th>Icon shown</th><th>Color</th><th>First seen</th><th>Last login</th></tr></thead>
         <tbody id="players"></tbody>
       </table>
     </div>
@@ -147,6 +219,7 @@
     name.firstChild.className = "dot";
     name.append(document.createElement("span"));
     cell(row, uuid, "uuid");
+    cell(row, "", "clients");
     cell(row, "");
     const colorCell = cell(row, "");
     const swatch = document.createElement("span");
@@ -167,14 +240,47 @@
     return row;
   }
 
+  // What they're on now (online only), then in grey any others they've used before.
+  function renderPlayerClients(td, now, ever) {
+    const parts = [];
+    if (now) {
+      for (const id of (now.length ? now : ["none"]).slice().sort(byOrder)) {
+        const tag = document.createElement("span");
+        tag.className = "client";
+        tag.title = "On it now";
+        tag.append(key(id), clientName(id));
+        parts.push(tag);
+      }
+    }
+    const before = ever.filter((id) => !(now ?? []).includes(id) && !(now && !now.length && id === "none")).sort(byOrder);
+    if (before.length) {
+      const past = document.createElement("span");
+      past.className = "muted";
+      past.title = now ? "Used before" : "Clients they've used";
+      past.textContent = (now ? "before: " : "") + before.map(clientName).join(", ");
+      parts.push(past);
+    }
+    if (!parts.length) {
+      const none = document.createElement("span");
+      none.className = "muted";
+      none.textContent = "–";
+      parts.push(none);
+    }
+    const list = document.createElement("div");
+    list.append(...parts);
+    td.replaceChildren(list);
+  }
+
   function renderPlayers() {
     const filter = $("playerFilter").value.toLowerCase();
     const body = $("players");
     const rows = [];
     for (const p of data.players) {
-      if (filter && !`${p.name} ${p.uuid}`.toLowerCase().includes(filter)) continue;
+      const ever = p.clients ?? [];
+      if (filter && !`${p.name} ${p.uuid} ${ever.map(clientName).join(" ")}`.toLowerCase().includes(filter)) continue;
       const row = playerRow(p.uuid);
-      const [name, , shown, color, first, last] = row.children;
+      const [name, , clients, shown, color, first, last] = row.children;
+      renderPlayerClients(clients, p.onClients, ever);
       name.firstChild.className = p.online ? "dot on" : "dot";
       name.firstChild.title = p.online ? "Online" : "Offline";
       name.lastChild.textContent = p.name;
@@ -208,6 +314,8 @@
     if (!data) return;
     $("live").textContent = data.live;
     $("playerCount").textContent = data.players.length;
+    $("seenLive").textContent = data.seenLive ?? 0;
+    $("seenPlayers").textContent = data.seenPlayers ?? 0;
     $("tokens").textContent = data.tokens;
     $("agentCount").textContent = data.agents.length;
     $("uptime").textContent = uptime(data.now - data.startedAt);
@@ -224,6 +332,8 @@
       clients.appendChild(chip);
     }
 
+    renderBars($("everUsed"), data.everUsed);
+    renderBars($("everSeen"), data.everSeen);
     renderPlayers();
 
     const agentFilter = $("agentFilter").value.toLowerCase();
@@ -268,6 +378,227 @@
       $("error").textContent = `Couldn't refresh: ${e.message}`;
     }
   }
+
+  // ---- Graphs ----
+  const CLIENT_ORDER = ["lunar", "essential", "labymod", "norisk", "polyplus", "dawn", "alpine", "cosmetica", "none"];
+  const CLIENT_NAMES = { lunar: "Lunar", essential: "Essential", labymod: "LabyMod", norisk: "NoRisk", polyplus: "PolyPlus",
+                         dawn: "Dawn", alpine: "Alpine", cosmetica: "Cosmetica", none: "none" };
+  const clientName = (id) => CLIENT_NAMES[id] ?? id;
+  const clientColor = (id) => CLIENT_ORDER.includes(id) ? `var(--c-${id})` : "var(--muted)";
+  const byOrder = (a, b) => (CLIENT_ORDER.indexOf(a) + 1 || 99) - (CLIENT_ORDER.indexOf(b) + 1 || 99);
+  const SVG = "http://www.w3.org/2000/svg";
+  let historyData = null;
+  let range = "day";
+  // Which players the graph counts: ClientTag users ("users") or the players they spotted ("seen").
+  let who = "users";
+  const counts = (p) => (who === "seen" ? p.s ?? {} : p.c);
+  const total = (p) => (who === "seen" ? p.seen ?? 0 : p.live);
+  const hidden = new Set();
+
+  function svg(tag, attrs, parent) {
+    const el = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    if (parent) parent.appendChild(el);
+    return el;
+  }
+
+  function key(id) {
+    const k = document.createElement("span");
+    k.className = "key";
+    k.style.background = clientColor(id);
+    return k;
+  }
+
+  function bold(text) {
+    const b = document.createElement("b");
+    b.textContent = text;
+    return b;
+  }
+
+  function renderBars(box, counts) {
+    const entries = Object.entries(counts ?? {}).sort((a, b) => b[1] - a[1] || byOrder(a[0], b[0]));
+    if (!entries.length) {
+      const none = document.createElement("span");
+      none.className = "muted";
+      none.textContent = "No data yet";
+      box.replaceChildren(none);
+      return;
+    }
+    const max = entries[0][1];
+    const parts = [];
+    for (const [id, n] of entries) {
+      const label = document.createElement("span");
+      label.textContent = clientName(id);
+      const track = document.createElement("div");
+      track.className = "track";
+      const fill = document.createElement("div");
+      fill.className = "fill";
+      fill.style.width = `${(n / max) * 100}%`;
+      fill.style.background = clientColor(id);
+      fill.title = `${clientName(id)}: ${n} player${n === 1 ? "" : "s"}`;
+      track.appendChild(fill);
+      const num = document.createElement("span");
+      num.className = "num";
+      num.textContent = n;
+      parts.push(label, track, num);
+    }
+    box.replaceChildren(...parts);
+  }
+
+  // A whole-number gridline step (1, 2, 5, 10, 20, ...) giving about four lines up to v.
+  function gridStep(v) {
+    const raw = Math.max(1, v / 4);
+    const pow = 10 ** Math.floor(Math.log10(raw));
+    for (const m of [1, 2, 5, 10]) if (m * pow >= raw) return m * pow;
+    return 10 * pow;
+  }
+
+  // "30 minutes", "1 hour", "12 hours".
+  function stepName(ms) {
+    const minutes = ms / 60000;
+    if (minutes < 60) return `${minutes} minutes`;
+    const hours = minutes / 60;
+    return hours === 1 ? "1 hour" : `${hours} hours`;
+  }
+
+  function axisTime(ms) {
+    const d = new Date(ms);
+    return range === "day" ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                           : d.toLocaleDateString([], { month: "short", day: "numeric" });
+  }
+
+  function renderHistory() {
+    const chart = $("historyChart");
+    const tip = $("historyTip");
+    chart.querySelector("svg")?.remove();
+    tip.style.display = "none";
+    if (!historyData) return;
+    const { points, from, now, step, sampleMs } = historyData;
+    const ids = [...new Set(points.flatMap((p) => Object.keys(counts(p))))].sort(byOrder);
+    const label = who === "seen" ? "Spotted players" : "Live users";
+    const shown = ids.filter((id) => !hidden.has(id));
+
+    const W = Math.max(320, chart.clientWidth), H = 280;
+    const m = { top: 12, right: 12, bottom: 26, left: 36 };
+    const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${label} by client over time` });
+    chart.prepend(root);
+    const x = (t) => m.left + ((t - from) / (now - from)) * (W - m.left - m.right);
+    const mid = (p) => x(Math.min(now, p.t + step / 2));
+    const peak = Math.max(1, ...points.flatMap((p) => shown.map((id) => counts(p)[id] ?? 0)));
+    const gap = gridStep(peak);
+    const top = Math.ceil(peak / gap) * gap;
+    const y = (v) => H - m.bottom - (v / top) * (H - m.top - m.bottom);
+
+    for (let v = 0; v <= top; v += gap) {
+      svg("line", { class: "grid", x1: m.left, x2: W - m.right, y1: y(v), y2: y(v) }, root);
+      svg("text", { class: "axis", x: m.left - 6, y: y(v) + 4, "text-anchor": "end" }, root).textContent = v;
+    }
+    const ticks = W < 600 ? 3 : 6;
+    for (let i = 0; i <= ticks; i++) {
+      const t = from + ((now - from) / ticks) * i;
+      const anchor = i === 0 ? "start" : i === ticks ? "end" : "middle";
+      svg("text", { class: "axis", x: x(t), y: H - 8, "text-anchor": anchor }, root).textContent = axisTime(t);
+    }
+
+    if (!points.length) {
+      svg("text", { class: "empty", x: W / 2, y: H / 2, "text-anchor": "middle" }, root).textContent =
+        "No samples yet - one is taken every 5 minutes";
+    }
+    // A gap of more than two points (server was off) breaks the line instead of joining across it.
+    for (const id of shown) {
+      let d = "", prev = null;
+      for (const p of points) {
+        d += `${prev === null || p.t - prev > step * 2 ? "M" : "L"}${mid(p).toFixed(1)},${y(counts(p)[id] ?? 0).toFixed(1)}`;
+        prev = p.t;
+      }
+      if (d) svg("path", { class: "series", d, stroke: clientColor(id) }, root);
+    }
+
+    // Hover: a crosshair on the nearest point and every shown client's count there.
+    const cross = svg("line", { class: "cross", y1: m.top, y2: H - m.bottom, visibility: "hidden" }, root);
+    const hit = svg("rect", { x: m.left, y: m.top, width: W - m.left - m.right, height: H - m.top - m.bottom, fill: "transparent" }, root);
+    hit.addEventListener("pointerleave", () => {
+      cross.setAttribute("visibility", "hidden");
+      tip.style.display = "none";
+    });
+    hit.addEventListener("pointermove", (e) => {
+      if (!points.length) return;
+      const box = root.getBoundingClientRect();
+      const px = ((e.clientX - box.left) / box.width) * W;
+      let best = points[0];
+      for (const p of points) if (Math.abs(mid(p) - px) < Math.abs(mid(best) - px)) best = p;
+      const cx = mid(best);
+      cross.setAttribute("x1", cx);
+      cross.setAttribute("x2", cx);
+      cross.setAttribute("visibility", "visible");
+      const head = document.createElement("div");
+      head.className = "muted";
+      head.textContent = step > sampleMs ? `${dateTime(best.t)} - peak over ${stepName(step)}` : dateTime(best.t);
+      const sum = document.createElement("div");
+      sum.className = "row";
+      sum.append(label, bold(total(best)));
+      const rows = [head, sum];
+      const at = counts(best);
+      for (const id of [...shown].sort((a, b) => (at[b] ?? 0) - (at[a] ?? 0) || byOrder(a, b))) {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.append(key(id), clientName(id), bold(at[id] ?? 0));
+        rows.push(row);
+      }
+      tip.replaceChildren(...rows);
+      tip.style.display = "block";
+      const left = (cx / W) * box.width;
+      const flip = left > box.width / 2;
+      tip.style.top = "8px";
+      tip.style.left = flip ? "" : `${left + 12}px`;
+      tip.style.right = flip ? `${box.width - left + 12}px` : "";
+    });
+
+    const legend = $("historyLegend");
+    legend.replaceChildren(...ids.map((id) => {
+      const b = document.createElement("button");
+      b.className = hidden.has(id) ? "off" : "";
+      b.title = hidden.has(id) ? "Show" : "Hide";
+      b.append(key(id), clientName(id));
+      b.addEventListener("click", () => {
+        if (!hidden.delete(id)) hidden.add(id);
+        renderHistory();
+      });
+      return b;
+    }));
+    $("historyNote").textContent = step > sampleMs ? `Each point is the peak over ${stepName(step)}` : "A sample every 5 minutes";
+  }
+
+  async function refreshHistory() {
+    try {
+      const url = new URL("/admin/history", location.origin);
+      url.searchParams.set("range", range);
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      historyData = await response.json();
+      renderHistory();
+    } catch (e) {
+      $("error").textContent = `Couldn't load the graph: ${e.message}`;
+    }
+  }
+
+  for (const b of document.querySelectorAll("#ranges button")) {
+    b.addEventListener("click", () => {
+      range = b.dataset.range;
+      for (const other of document.querySelectorAll("#ranges button")) other.setAttribute("aria-pressed", String(other === b));
+      refreshHistory();
+    });
+  }
+  for (const b of document.querySelectorAll("#whos button")) {
+    b.addEventListener("click", () => {
+      who = b.dataset.who;
+      for (const other of document.querySelectorAll("#whos button")) other.setAttribute("aria-pressed", String(other === b));
+      renderHistory();
+    });
+  }
+  window.addEventListener("resize", renderHistory);
+  setInterval(() => { if ($("auto").checked) refreshHistory(); }, 60_000);
+  refreshHistory();
 
   for (const id of ["playerFilter", "agentFilter", "requestFilter", "hideOurs"]) $(id).addEventListener("input", render);
   setInterval(() => { if ($("auto").checked) refresh(); }, 5000);
