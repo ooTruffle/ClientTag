@@ -3,6 +3,7 @@ package com.ootruffle.clienttag.config;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
+import com.ootruffle.clienttag.DebugTags;
 import com.ootruffle.clienttag.NativeClients;
 import com.ootruffle.clienttag.WhoCommand;
 import com.ootruffle.clienttag.render.ClientIcon;
@@ -16,7 +17,7 @@ import org.polyfrost.oneconfig.utils.v1.dsl.ScreensKt;
 
 /**
  * The mod's settings, editable through OneConfig when it's installed (also via /clienttag or /ct,
- * which also has {@code who <player>} and the {@code flag}, {@code unflag} and {@code flags} commands).
+ * which also has {@code who <player>}, {@code debug [player]} and the {@code flag}, {@code unflag} and {@code flags} commands).
  * Without OneConfig every client is shown everywhere in its reported color, and there are no
  * commands (config/clienttag/flags.json can still be edited by hand).
  * <p>
@@ -55,6 +56,11 @@ public final class ClientTagSettings {
     /** Whether to ask the ClientTag server to show other ClientTag users a ClientTag icon by our name. */
     public static boolean showOwnTag() {
         return !LOADED || Present.showOwnTag();
+    }
+
+    /** Whether to tell the ClientTag server which clients we've seen other players on, for its statistics. */
+    public static boolean shareSeen() {
+        return !LOADED || Present.shareSeen();
     }
 
     /** Whether to say in chat when a flagged player is on the same server (see {@link com.ootruffle.clienttag.LocalFlags}). */
@@ -102,7 +108,7 @@ public final class ClientTagSettings {
             config().normalizeIconOrder();
             // /ct is short for /clienttag. Each gets the whole tree: a redirect wouldn't run bare /ct.
             for (String name : new String[] {"clienttag", "ct"}) {
-                CommandManager.INSTANCE.register(FlagCommands.addTo(withWho(ScreensKt.addDefaultCommand(config(), name))));
+                CommandManager.INSTANCE.register(FlagCommands.addTo(withDebug(withWho(ScreensKt.addDefaultCommand(config(), name)))));
             }
         }
 
@@ -128,6 +134,29 @@ public final class ClientTagSettings {
                             })));
         }
 
+        /** Adds {@code debug [player]} (see {@link DebugTags}) to /clienttag. */
+        private static <S> LiteralArgumentBuilder<S> withDebug(LiteralArgumentBuilder<S> root) {
+            return root.then(LiteralArgumentBuilder.<S>literal("debug")
+                    .executes(context -> {
+                        DebugTags.clear();
+                        return 1;
+                    })
+                    .then(RequiredArgumentBuilder.<S, String>argument("player", StringArgumentType.word())
+                            .suggests((context, builder) -> {
+                                final String typed = builder.getRemaining().toLowerCase(Locale.ROOT);
+                                for (String name : WhoCommand.playerNames()) {
+                                    if (name.toLowerCase(Locale.ROOT).startsWith(typed)) {
+                                        builder.suggest(name);
+                                    }
+                                }
+                                return builder.buildFuture();
+                            })
+                            .executes(context -> {
+                                DebugTags.toggle(StringArgumentType.getString(context, "player"));
+                                return 1;
+                            })));
+        }
+
         static boolean showOnNametags() {
             return config().showOnNametags;
         }
@@ -142,6 +171,10 @@ public final class ClientTagSettings {
 
         static boolean showOwnTag() {
             return config().showOwnTag;
+        }
+
+        static boolean shareSeen() {
+            return config().shareSeen;
         }
 
         static boolean flagAlerts() {

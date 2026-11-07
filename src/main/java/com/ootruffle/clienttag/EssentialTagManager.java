@@ -8,6 +8,7 @@ import com.ootruffle.clienttag.platform.Platform;
 import com.ootruffle.clienttag.platform.SessionJoins;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,6 +47,7 @@ public final class EssentialTagManager {
     private static final long STABLE_CONNECTION_MS = 300_000;
 
     private static final Set<UUID> iconUsers = ConcurrentHashMap.newKeySet();
+    private static final Answers answers = new Answers(3_000);
     private static final AtomicReference<Set<UUID>> pendingTracked = new AtomicReference<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         final Thread thread = new Thread(r, "ClientTag-Essential");
@@ -68,6 +70,11 @@ public final class EssentialTagManager {
     private static long backoff = MIN_BACKOFF_MS;
 
     private EssentialTagManager() {}
+
+    /** Whether the client has said if this player is on it (see {@link WhoCommand}). */
+    public static boolean hasAnswered(UUID uuid) {
+        return answers.has(uuid);
+    }
 
     /** The Essential indicator color (RGB), or null if they have no Essential icon (or it's not known yet). */
     public static Integer getEssentialColor(UUID uuid) {
@@ -98,7 +105,11 @@ public final class EssentialTagManager {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> tracked = new HashSet<>();
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> tracked = new LinkedHashSet<>();
+        for (UUID uuid : WhoCommand.wanted()) {
+            addTracked(tracked, uuid, self);
+        }
         platform.forEachWorldPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         platform.forEachTabListPlayer((uuid, textures) -> addTracked(tracked, uuid, self));
         // Coalesce: if the background thread is still busy (e.g. connecting), the newest snapshot wins.
@@ -122,6 +133,7 @@ public final class EssentialTagManager {
         }
         subscribed.clear();
         iconUsers.clear();
+        answers.clear();
     }
 
     private static void sync() {
@@ -139,6 +151,7 @@ public final class EssentialTagManager {
         if (!removed.isEmpty()) {
             subscribed.removeAll(removed);
             removed.forEach(iconUsers::remove);
+            answers.forget(removed);
             updateSubscription(removed, false);
         }
 
@@ -152,6 +165,7 @@ public final class EssentialTagManager {
             updateSubscription(added, true);
             // Subscribing only brings future changes - the current outfit has to be asked for.
             added.forEach(socket::requestOutfit);
+            answers.asked(added);
         }
     }
 
@@ -169,6 +183,9 @@ public final class EssentialTagManager {
         } else {
             iconUsers.remove(player);
         }
+        if (subscribed.contains(player)) {
+            answers.answered(player);
+        }
     }
 
     /** Closes the socket; the next sync after the client is turned back on reconnects. */
@@ -180,6 +197,7 @@ public final class EssentialTagManager {
         }
         subscribed.clear();
         iconUsers.clear();
+        answers.clear();
     }
 
     private static boolean ensureConnected() {
@@ -202,6 +220,7 @@ public final class EssentialTagManager {
             socket = null;
             subscribed.clear();
             iconUsers.clear();
+            answers.clear();
             scheduleRetry(now);
             return false;
         }

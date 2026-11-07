@@ -42,6 +42,7 @@ public final class ClientTag {
             return;
         }
         ClientTagUsers.onClientTick();
+        WhoCommand.onClientTick();
         // A client we're running on draws its own indicators, and a second connection could disrupt its own.
         for (ClientIcon icon : ClientIcon.values()) {
             if (!NativeClients.isRunning(icon)) {

@@ -63,11 +63,9 @@ public final class AlpineSocket implements WebSocket.Listener {
     /** What the real client reports for both of 162's strings when it isn't on a server. */
     public static final String MENUS = "menus";
 
-    /** How many replies and unreadable frames each connection logs. */
+    /** How many unreadable frames each connection logs. */
     private static final int MAX_LOGGED = 5;
     private static final int HEX_LIMIT = 256;
-    /** {@code -Dclienttag.alpine.debug=true} logs every frame sent and received. */
-    private static final boolean DEBUG = Boolean.getBoolean("clienttag.alpine.debug");
 
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -92,7 +90,6 @@ public final class AlpineSocket implements WebSocket.Listener {
     private volatile WebSocket ws;
     private volatile boolean authenticated;
     // Socket thread only.
-    private int loggedReplies;
     private int loggedFailures;
 
     private AlpineSocket(Listener listener) {
@@ -182,18 +179,10 @@ public final class AlpineSocket implements WebSocket.Listener {
 
     /** JDK WebSockets reject overlapping sends, so each send waits for the previous one. */
     private synchronized void send(byte[] frame) {
-        if (DEBUG) {
-            LOGGER.info("Alpine frame sent: {}", hex(frame));
-        }
         sendChain = sendChain.thenCompose(w -> w.sendBinary(ByteBuffer.wrap(frame), true));
     }
 
     private void onMessage(byte[] data) throws Exception {
-        if (DEBUG) {
-            // 164 carries the account's cloud session token, which has no place in a log people share.
-            final boolean session = data.length >= 2 && (data[0] & 0xFF) == 0xCC && (data[1] & 0xFF) == SESSION;
-            LOGGER.info("Alpine frame received: {}", session ? "cc a4 (cloud session, " + data.length + " bytes)" : hex(data));
-        }
         final MsgPack.Reader in = new MsgPack.Reader(data);
         switch (in.unpackInt()) {
             case AUTH_CHALLENGE:
@@ -212,8 +201,6 @@ public final class AlpineSocket implements WebSocket.Listener {
                 onLookupReply(in);
                 break;
             case ERROR:
-                LOGGER.info("Alpine socket said: {}", hex(data));
-                break;
             default:
                 break;
         }
@@ -230,19 +217,12 @@ public final class AlpineSocket implements WebSocket.Listener {
 
     private void onLookupReply(MsgPack.Reader in) throws IOException {
         final int n = in.unpackArrayHeader();
-        int users = 0;
         for (int i = 0; i < n; i++) {
             final UUID uuid = new UUID(in.unpackLong(), in.unpackLong());
             final boolean alpineUser = in.unpackBoolean();
             // The real client reads the cosmetics for every player, users or not.
             skipCosmetics(in);
-            if (alpineUser) {
-                users++;
-            }
             listener.onLookup(uuid, alpineUser);
-        }
-        if (loggedReplies++ < MAX_LOGGED) {
-            LOGGER.info("Alpine answered for {} players, {} on Alpine", n, users);
         }
     }
 
@@ -305,9 +285,6 @@ public final class AlpineSocket implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-        if (DEBUG) {
-            LOGGER.info("Alpine text frame received: {}", data);
-        }
         webSocket.request(1);
         return null;
     }
