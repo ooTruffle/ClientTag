@@ -30,10 +30,17 @@ public final class IconArt {
 
     /**
      * Build-time only (Gradle's generateIconFont task): writes the drawn icons as PNGs into
-     * the directory given as the only argument, as the glyph textures of the modern versions'
+     * the directory given as the first argument, as the glyph textures of the modern versions'
      * {@code clienttag:icons} font. Doesn't touch ClientIcon, whose color lookups need the game.
+     * <p>
+     * With {@code --legacy} as the second argument, writes the textures 1.8.9's
+     * {@code minecraft:default} font points at instead (only Argentum reads it): every icon,
+     * PolyPlus and Cosmetica too, each widened by a ninth with one barely-there pixel in its last
+     * column. A bitmap glyph advances by its drawn width plus 1, so that pixel makes every icon
+     * advance 10px - 8px of icon and a 2px gap, the same as {@code IconGlyphs.ADVANCE}.
      */
     public static void main(String[] args) throws Exception {
+        final boolean legacy = args.length > 1 && "--legacy".equals(args[1]);
         final Map<String, Consumer<int[]>> icons = new LinkedHashMap<>();
         icons.put("lunar", IconArt::crescent);
         icons.put("dawn", IconArt::sunrise);
@@ -41,9 +48,14 @@ public final class IconArt {
         icons.put("norisk", IconArt::shield);
         icons.put("labymod", IconArt::wolf);
         icons.put("alpine", IconArt::mountain);
+        icons.put("cmclient", IconArt::cube);
         icons.put("velo", IconArt::chevron);
         icons.put("clienttag", IconArt::nametag);
         icons.put("flagged", IconArt::warning);
+        if (legacy) {
+            icons.put("polyplus", image("/assets/clienttag/textures/polyplus_badge.png"));
+            icons.put("cosmetica", image("/assets/clienttag/textures/cosmetica_halo.png"));
+        }
 
         final File dir = new File(args[0]);
         if (!dir.isDirectory() && !dir.mkdirs()) {
@@ -53,8 +65,12 @@ public final class IconArt {
         for (Map.Entry<String, Consumer<int[]>> icon : icons.entrySet()) {
             final int[] pixels = new int[size * size];
             icon.getValue().accept(pixels);
-            final BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+            final int width = legacy ? size * 9 / 8 : size;
+            final BufferedImage image = new BufferedImage(width, size, BufferedImage.TYPE_INT_ARGB);
             image.setRGB(0, 0, size, size, pixels, 0, size);
+            if (legacy) {
+                image.setRGB(width - 1, size - 1, 0x01FFFFFF);
+            }
             ImageIO.write(image, "png", new File(dir, icon.getKey() + ".png"));
         }
     }
@@ -152,6 +168,23 @@ public final class IconArt {
             }
             return inPolygon(x, y, smallXs, smallYs);
         });
+    }
+
+    /** A cube seen corner-on: a hexagon with its three inner edges cut out as a Y. */
+    static void cube(int[] pixels) {
+        final double cx = 0.5, cy = 0.5, r = 0.47;
+        final double[] xs = new double[6], ys = new double[6];
+        for (int i = 0; i < 6; i++) {
+            final double angle = Math.toRadians(90 + 60 * i);
+            xs[i] = cx + r * Math.cos(angle);
+            ys[i] = cy - r * Math.sin(angle);
+        }
+        // Inner edges run from the middle to the upper-left (150°), upper-right (30°) and bottom corners.
+        final double ux = r * Math.cos(Math.toRadians(30)), uy = r * Math.sin(Math.toRadians(30));
+        paint(pixels, (x, y) -> inPolygon(x, y, xs, ys)
+                && !nearSegment(x, y, cx, cy, cx - ux, cy - uy, 0.035)
+                && !nearSegment(x, y, cx, cy, cx + ux, cy - uy, 0.035)
+                && !nearSegment(x, y, cx, cy, cx, cy + r, 0.035));
     }
 
     /** A bold V: two thick strokes meeting at a point near the bottom. */

@@ -52,6 +52,11 @@ public final class ProtoWriter {
                 .fixed64(2, uuid.getLeastSignificantBits());
     }
 
+    /** {@code UuidAndUsername}: { 1: uuid, 2: username }. */
+    public static ProtoWriter uuidAndUsername(UUID uuid, String name) {
+        return new ProtoWriter().message(1, uuid(uuid)).string(2, name);
+    }
+
     private void tag(int field, int wireType) {
         writeVarint(((long) field << 3) | wireType);
     }

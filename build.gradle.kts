@@ -114,17 +114,22 @@ loom {
     runConfigs.remove(runConfigs["server"])
 }
 
-// Modern versions draw the icons as glyphs of a bitmap font; the glyph textures are painted by
-// the same IconArt code 1.8.9 uses at runtime, so the shapes only live in one place.
+// Modern versions draw the icons as glyphs of a bitmap font, and so does Argentum on 1.8.9; the
+// glyph textures are painted by the same IconArt code vanilla 1.8.9 uses at runtime, so the shapes
+// only live in one place.
 val generateIconFont = tasks.register<JavaExec>("generateIconFont") {
     val output = layout.buildDirectory.dir("generated/iconFont")
     // Not runtimeClasspath: that includes the processed resources this task feeds into.
-    classpath = sourceSets.main.get().output.classesDirs + sourceSets.main.get().compileClasspath
+    // The source resources go on it directly, for the PNG icons (PolyPlus, Cosmetica) 1.8.9 needs.
+    classpath = sourceSets.main.get().output.classesDirs + sourceSets.main.get().compileClasspath +
+            files(rootProject.file("src/main/resources"))
     mainClass = "$baseGroup.render.IconArt"
     jvmArgs("-Djava.awt.headless=true")
     argumentProviders.add(CommandLineArgumentProvider {
-        listOf(output.get().dir("assets/$modId/textures/font").asFile.absolutePath)
+        listOf(output.get().dir("assets/$modId/textures/font").asFile.absolutePath) +
+                (if (isLegacy) listOf("--legacy") else emptyList())
     })
+    inputs.dir(rootProject.file("src/main/resources/assets/$modId/textures"))
     outputs.dir(output)
     // Start empty, so textures of icons that were removed don't linger and end up in the jar.
     doFirst { delete(output) }
@@ -153,9 +158,7 @@ tasks {
             expand(props)
         }
 
-        if (!isLegacy) {
-            from(generateIconFont)
-        }
+        from(generateIconFont)
     }
 
     withType<JavaCompile>().configureEach {
@@ -166,7 +169,7 @@ tasks {
         inputs.property("archivesName", base.archivesName)
     }
 
-    // The archives name already carries the versions: ClientTag-1.0.0-1.21.11_fabric.jar
+    // The archives name already carries the versions: ClientTag-1.2.1-1.21.11_fabric.jar
     withType<AbstractArchiveTask>().configureEach {
         archiveVersion = ""
     }
