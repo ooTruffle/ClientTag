@@ -177,7 +177,7 @@ tasks {
         inputs.property("archivesName", base.archivesName)
     }
 
-    // The archives name already carries the versions: ClientTag-1.2.2-1.21.11_fabric.jar
+    // The archives name already carries the versions: ClientTag-1.2.3-1.21.11_fabric.jar
     withType<AbstractArchiveTask>().configureEach {
         archiveVersion = ""
     }
