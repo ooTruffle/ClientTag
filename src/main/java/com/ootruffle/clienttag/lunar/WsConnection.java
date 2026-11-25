@@ -51,7 +51,8 @@ final class WsConnection implements WebSocket.Listener {
             if (e.getCause() instanceof WebSocketHandshakeException) {
                 final HttpResponse<?> response = ((WebSocketHandshakeException) e.getCause()).getResponse();
                 throw new IOException("couldn't open " + url + ": HTTP " + response.statusCode()
-                        + response.headers().firstValue("cf-mitigated").map(v -> " (Cloudflare " + v + ")").orElse(""), e);
+                        + response.headers().firstValue("cf-mitigated").map(v -> " (Cloudflare " + v + ")").orElse("")
+                        + response.headers().firstValue("server").map(v -> " server=" + v).orElse(""), e);
             }
             throw new IOException("couldn't open " + url + ": " + e, e);
         }

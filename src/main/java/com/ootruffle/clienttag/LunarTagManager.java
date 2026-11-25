@@ -2,7 +2,6 @@ package com.ootruffle.clienttag;
 
 import com.ootruffle.clienttag.lunar.LunarAuthenticator;
 import com.ootruffle.clienttag.lunar.LunarSocket;
-import com.ootruffle.clienttag.lunar.ServerMappings;
 import com.ootruffle.clienttag.config.ClientTagSettings;
 import com.ootruffle.clienttag.render.ClientIcon;
 import com.ootruffle.clienttag.platform.Platform;
@@ -12,8 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -27,10 +26,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Keeps the Lunar asset socket in sync with the players in the current world, the way
- * the real client does: SubscribeV2 for players entering view, Unsubscribe for players
- * leaving it, about every 150 ms. Results land in a UUID-keyed cache that the nametag
- * renderer reads; a player with no entry is simply not on Lunar.
+ * Keeps one Lunar game websocket open and asks {@code LoadTabLogos} about players in
+ * the tab list and the world, in batches, the way Lunar itself does for tab icons. Results
+ * land in a UUID-keyed cache that the nametag renderer reads; a player who isn't in the
+ * response is simply not on Lunar.
  * <p>
  * All socket work runs on one background thread - the client thread only snapshots the
  * player list and never waits on the network.
@@ -42,7 +41,8 @@ public final class LunarTagManager {
 
     private static final Logger LOGGER = LogManager.getLogger("ClientTag");
 
-    private static final int SYNC_INTERVAL_TICKS = 3;
+    private static final int SYNC_INTERVAL_TICKS = 20;
+    private static final int MAX_TRACKED = 512;
     private static final int MAX_BATCH = 100;
     private static final long MIN_BACKOFF_MS = 10_000;
     private static final long MAX_BACKOFF_MS = 300_000;
@@ -63,14 +63,10 @@ public final class LunarTagManager {
     private static int tickCounter;
 
     // Background thread only (generation is also read by response callbacks).
-    private static ServerMappings mappings;
-    private static String hostname;
-    private static String reportedHost;
-    private static String location;
+    private static boolean active;
     private static LunarSocket socket;
     private static long connectedAt;
-    private static boolean locationReported;
-    private static final Set<UUID> subscribed = new HashSet<>();
+    private static final Set<UUID> asked = new HashSet<>();
     private static long nextConnectAttempt;
     private static long backoff = MIN_BACKOFF_MS;
     private static volatile int generation;
@@ -97,7 +93,8 @@ public final class LunarTagManager {
         if (!Objects.equals(address, lastAddress)) {
             lastAddress = address;
             tickCounter = 0;
-            EXECUTOR.execute(() -> changeServer(address));
+            final boolean nowActive = address != null;
+            EXECUTOR.execute(() -> changeServer(nowActive));
         }
         if (enabled != wasEnabled) {
             wasEnabled = enabled;
@@ -111,11 +108,13 @@ public final class LunarTagManager {
         tickCounter = 0;
 
         final UUID self = platform.localPlayerId();
-        final Set<UUID> visible = new HashSet<>();
-        platform.forEachWorldPlayer((uuid, textures) -> addVisible(visible, uuid, self));
+        // Players asked about with /clienttag who first, so they're never past the limit.
+        final Set<UUID> visible = new LinkedHashSet<>();
         for (UUID uuid : WhoCommand.wanted()) {
             addVisible(visible, uuid, self);
         }
+        platform.forEachWorldPlayer((uuid, textures) -> addVisible(visible, uuid, self));
+        platform.forEachTabListPlayer((uuid, textures) -> addVisible(visible, uuid, self));
         // Coalesce: if the background thread is still busy (e.g. connecting), the newest snapshot wins.
         if (pendingVisible.getAndSet(visible) == null) {
             EXECUTOR.execute(LunarTagManager::sync);
@@ -126,55 +125,29 @@ public final class LunarTagManager {
         // Real accounts have v4 UUIDs; server-side NPCs (v2 on Hypixel) can't be Lunar users.
         // The real client never looks itself up either. ClientTag users who aren't really
         // on Lunar would show up as Lunar users, since ClientTag logs them in.
-        if (uuid.version() == 4 && !uuid.equals(self) && !ClientTagUsers.hides(uuid, ClientIcon.LUNAR)) {
+        if (uuid != null && uuid.version() == 4 && !uuid.equals(self) && visible.size() < MAX_TRACKED
+                && !ClientTagUsers.hides(uuid, ClientIcon.LUNAR)) {
             visible.add(uuid);
         }
     }
 
-    private static void changeServer(String address) {
+    private static void changeServer(boolean nowActive) {
         generation++;
-        // The real client unsubscribes from everyone it was watching on the old server.
-        if (socket != null && socket.isOpen()) {
-            subscribed.forEach(socket::unsubscribe);
-        }
-        subscribed.clear();
+        asked.clear();
         lunarColors.clear();
         answers.clear();
-        locationReported = false;
-        hostname = address == null ? null : parseHostname(address);
-        reportedHost = null;
-        location = null;
-        if (hostname == null) {
-            return;
-        }
-        // Lunar knows listed servers by one canonical address - "truffle.hypixel.net" has to be
-        // reported as "mc.hypixel.net", or Lunar answers for nobody. Anything it doesn't list
-        // is reported as typed in.
-        final ServerMappings.Server server = isIpLiteral(hostname) ? null : mappings().resolve(hostname);
-        reportedHost = server != null ? server.primaryAddress : hostname;
-        location = server != null ? server.domain : baseDomain(hostname);
+        active = nowActive;
     }
 
     private static void sync() {
         final Set<UUID> visible = pendingVisible.getAndSet(null);
-        if (visible == null || hostname == null || !ready()) {
+        if (visible == null || !active || !ensureConnected()) {
             return;
-        }
-
-        final List<UUID> removed = new ArrayList<>();
-        for (UUID uuid : subscribed) {
-            if (!visible.contains(uuid)) {
-                removed.add(uuid);
-            }
-        }
-        for (UUID uuid : removed) {
-            subscribed.remove(uuid);
-            socket.unsubscribe(uuid);
         }
 
         final List<UUID> added = new ArrayList<>();
         for (UUID uuid : visible) {
-            if (subscribed.add(uuid)) {
+            if (asked.add(uuid)) {
                 added.add(uuid);
             }
         }
@@ -183,37 +156,18 @@ public final class LunarTagManager {
         }
     }
 
-    /** Connects and reports which server we're on if needed; whether players can be looked up now. */
-    private static boolean ready() {
-        if (!ensureConnected()) {
-            return false;
-        }
-        if (!locationReported) {
-            try {
-                socket.reportLocation(reportedHost, location);
-                locationReported = true;
-                LOGGER.info("Reported location {} as {} (connected via {})", location, reportedHost, hostname);
-            } catch (Exception e) {
-                LOGGER.warn("Couldn't report server location to Lunar: {}", e.toString());
-                socket.close();
-                return false;
-            }
-        }
-        return true;
-    }
-
     private static void lookup(List<UUID> batch) {
         final int gen = generation;
-        socket.subscribe(batch).whenComplete((entries, error) -> {
+        socket.loadTabLogos(batch).whenComplete((entries, error) -> {
             if (gen != generation) {
                 return;
             }
             if (error != null) {
-                LOGGER.warn("SubscribeV2 failed: {}", error.toString());
+                LOGGER.warn("LoadTabLogos failed: {}", error.toString());
                 // Let the next sync ask about these players again.
                 EXECUTOR.execute(() -> {
                     if (gen == generation) {
-                        subscribed.removeAll(batch);
+                        asked.removeAll(batch);
                     }
                 });
                 return;
@@ -222,9 +176,14 @@ public final class LunarTagManager {
                 lunarColors.put(entry.uuid, entry.color);
             }
             answers.answered(batch);
-            LOGGER.debug("SubscribeV2: asked about {} players, {} on Lunar ({} known this server)",
+            LOGGER.debug("LoadTabLogos: asked about {} players, {} on Lunar ({} known this server)",
                     batch.size(), entries.size(), lunarColors.size());
         });
+    }
+
+    private static void onLogo(LunarSocket.Entry entry) {
+        lunarColors.put(entry.uuid, entry.color);
+        answers.answered(entry.uuid);
     }
 
     /** Closes the socket; the next sync after the client is turned back on reconnects. */
@@ -234,9 +193,10 @@ public final class LunarTagManager {
             socket = null;
             LOGGER.info("Disconnected from Lunar (turned off in settings)");
         }
-        subscribed.clear();
+        asked.clear();
         lunarColors.clear();
         answers.clear();
+        active = false;
     }
 
     private static boolean ensureConnected() {
@@ -250,7 +210,7 @@ public final class LunarTagManager {
                 backoff = MIN_BACKOFF_MS;
             }
             socket = null;
-            subscribed.clear();
+            asked.clear();
             scheduleRetry(now);
             return false;
         }
@@ -259,10 +219,16 @@ public final class LunarTagManager {
         }
 
         final Platform platform = Platform.get();
+        final int gen = generation;
         try {
             final String jwt = LunarAuthenticator.fetchToken(platform.sessionId(), platform.sessionName(), SessionJoins::join);
             final LunarSocket connected = LunarSocket.connect(platform.sessionId(), platform.sessionName(), jwt, installationId());
             try {
+                connected.onLogo(entry -> {
+                    if (gen == generation) {
+                        onLogo(entry);
+                    }
+                });
                 connected.login();
             } catch (Exception e) {
                 connected.close();
@@ -270,7 +236,6 @@ public final class LunarTagManager {
             }
             socket = connected;
             connectedAt = System.currentTimeMillis();
-            locationReported = false;
             LOGGER.info("Connected to Lunar");
             return true;
         } catch (Exception e) {
@@ -283,13 +248,6 @@ public final class LunarTagManager {
     private static void scheduleRetry(long now) {
         nextConnectAttempt = now + backoff;
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
-    }
-
-    private static ServerMappings mappings() {
-        if (mappings == null) {
-            mappings = new ServerMappings(FabricLoader.getInstance().getConfigDir().resolve("clienttag/lunar-servers.json").toFile());
-        }
-        return mappings;
     }
 
     /** A random ID persisted per install, like the launcher's own installation ID. */
@@ -310,34 +268,6 @@ public final class LunarTagManager {
             LOGGER.warn("Couldn't persist installation ID: {}", e.toString());
             return UUID.randomUUID().toString();
         }
-    }
-
-    /** "mc.hypixel.net:25565" -> "mc.hypixel.net", "[::1]:25565" -> "::1". No DNS/SRV lookups. */
-    static String parseHostname(String address) {
-        String host = address.trim().toLowerCase(Locale.ROOT);
-        if (host.startsWith("[")) {
-            final int end = host.indexOf(']');
-            host = end > 0 ? host.substring(1, end) : host.substring(1);
-        } else if (host.indexOf(':') == host.lastIndexOf(':') && host.indexOf(':') >= 0) {
-            host = host.substring(0, host.indexOf(':'));
-        }
-        while (host.endsWith(".")) {
-            host = host.substring(0, host.length() - 1);
-        }
-        return host;
-    }
-
-    /** Fallback for servers Lunar doesn't list: "play.example.net" -> "example.net"; IP literals are returned unchanged. */
-    static String baseDomain(String hostname) {
-        if (isIpLiteral(hostname)) {
-            return hostname;
-        }
-        final String[] labels = hostname.split("\\.");
-        return labels.length <= 2 ? hostname : labels[labels.length - 2] + "." + labels[labels.length - 1];
-    }
-
-    private static boolean isIpLiteral(String hostname) {
-        return hostname.contains(":") || hostname.matches("[0-9.]+");
     }
 
 }

@@ -10,7 +10,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import org.apache.logging.log4j.LogManager;
 
 /**
- * Shows Lunar Client, Dawn Client, Essential, NoRiskClient, LabyMod, Alpine Client, Velo Client and Cosmetica indicators next to the nametags of
+ * Shows Lunar Client, Dawn Client, Essential, NoRiskClient, LabyMod, Alpine Client, CMClient, Velo Client and Cosmetica indicators next to the nametags of
  * players who are on those clients.
  * <p>
  * Everything is driven from mixins (client tick + nametag render); the Lunar, Dawn,
@@ -26,6 +26,7 @@ public final class ClientTag {
 
     public static void init() {
         migrateLegacyFiles();
+        deleteUnusedFiles();
         ClientTagSettings.init();
         LocalFlags.init();
         System.out.println("[ClientTag] Initialized.");
@@ -51,9 +52,21 @@ public final class ClientTag {
         }
     }
 
+    /** Lunar's server list (several MB) isn't needed since lookups stopped reporting the server. */
+    private static void deleteUnusedFiles() {
+        final Path dir = FabricLoader.getInstance().getConfigDir().resolve("clienttag");
+        for (String name : new String[]{"lunar-servers.json", "lunar-servers.json.etag", "lunar-servers.json.tmp"}) {
+            try {
+                Files.deleteIfExists(dir.resolve(name));
+            } catch (IOException e) {
+                LogManager.getLogger("ClientTag").warn("Couldn't delete unused {}: {}", name, e.toString());
+            }
+        }
+    }
+
     /**
-     * The mod used to be called LunerTag: moves files from config/lunertag (Lunar installation ID,
-     * server list) to config/clienttag, leaving anything already at the new location alone.
+     * The mod used to be called LunerTag: moves files from config/lunertag to config/clienttag,
+     * leaving anything already at the new location alone.
      */
     private static void migrateLegacyFiles() {
         final Path configDir = FabricLoader.getInstance().getConfigDir();

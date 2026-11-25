@@ -1,6 +1,7 @@
 package com.ootruffle.clienttag.render;
 
 import com.ootruffle.clienttag.AlpineTagManager;
+import com.ootruffle.clienttag.CMClientTagManager;
 import com.ootruffle.clienttag.ClientTagUsers;
 import com.ootruffle.clienttag.CosmeticaTagManager;
 import com.ootruffle.clienttag.DawnTagManager;
@@ -32,9 +33,10 @@ import java.util.function.Predicate;
  * {@link com.ootruffle.clienttag.config.ClientTagConfig} (named after {@link Spec#config}), and its
  * glyph in assets/clienttag/font/icons.json (plus {@link IconArt#main} if it's drawn in code).
  * <p>
- * Lunar, Dawn, Essential, NoRisk, LabyMod, Alpine and Velo icons are generated in code rather than shipped as
+ * Lunar, Dawn, Essential, NoRisk, LabyMod, Alpine, CMClient and Velo icons are generated in code rather than shipped as
  * assets, so none of those clients' artwork is used: Lunar gets a crescent moon, Dawn a rising sun,
- * Essential a sparkle, NoRisk a shield, LabyMod a wolf head, Alpine a mountain, Velo a chevron, and ClientTag itself a name tag.
+ * Essential a sparkle, NoRisk a shield, LabyMod a wolf head, Alpine a mountain, CMClient a cube, Velo a chevron,
+ * and ClientTag itself a name tag.
  * The last entry, {@link #FLAGGED}, isn't a client at all but the warning triangle for players
  * the user flagged locally, so it can be ordered, hidden and recolored like the rest.
  * PolyPlus gets its own badge (used with Polyfrost's permission), and Cosmetica its halo (at its
@@ -113,7 +115,15 @@ public enum ClientIcon {
             .answered(AlpineTagManager::hasAnswered)
             .config("alpine", "Not running on Alpine Client")
             .runningWhen(NativeClients::isAlpineClient)),
-    VELO(new Spec("velo", "Velo Client", '\uE00B')
+    // CMClient is its own 1.8.9 jar that can't load Fabric mods, so ClientTag never runs on it.
+    CMCLIENT(new Spec("cmclient", "CMClient", '')
+            .color(CMClientTagManager::getCMClientColor)
+            .preview(0xC77DFF)
+            .art(IconArt::cube)
+            .tick(CMClientTagManager::onClientTick)
+            .answered(CMClientTagManager::hasAnswered)
+            .config("cmClient", null)),
+    VELO(new Spec("velo", "Velo Client", '')
             .color(VeloTagManager::getVeloColor)
             .preview(0x4DA6FF)
             .art(IconArt::chevron)
