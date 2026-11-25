@@ -56,12 +56,12 @@
   /* One fixed color per client, so a client keeps its color whatever is shown. */
   :root {
     --c-lunar: #2a78d6; --c-essential: #eb6834; --c-labymod: #1baf7a; --c-norisk: #eda100;
-    --c-polyplus: #e87ba4; --c-dawn: #008300; --c-alpine: #6250d6; --c-cosmetica: #e34948; --c-none: #8a8a94;
+    --c-polyplus: #e87ba4; --c-dawn: #008300; --c-alpine: #6250d6; --c-cosmetica: #e34948; --c-velo: #0f9fb8; --c-none: #8a8a94;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --c-lunar: #3987e5; --c-essential: #d95926; --c-labymod: #199e70; --c-norisk: #c98500;
-      --c-polyplus: #d55181; --c-dawn: #008300; --c-alpine: #9085e9; --c-cosmetica: #e66767; --c-none: #7a7a86;
+      --c-polyplus: #d55181; --c-dawn: #008300; --c-alpine: #9085e9; --c-cosmetica: #e66767; --c-velo: #2bb8d1; --c-none: #7a7a86;
     }
   }
   .chart { position: relative; }
@@ -380,9 +380,9 @@
   }
 
   // ---- Graphs ----
-  const CLIENT_ORDER = ["lunar", "essential", "labymod", "norisk", "polyplus", "dawn", "alpine", "cosmetica", "none"];
+  const CLIENT_ORDER = ["lunar", "essential", "labymod", "norisk", "polyplus", "dawn", "alpine", "cosmetica", "velo", "none"];
   const CLIENT_NAMES = { lunar: "Lunar", essential: "Essential", labymod: "LabyMod", norisk: "NoRisk", polyplus: "PolyPlus",
-                         dawn: "Dawn", alpine: "Alpine", cosmetica: "Cosmetica", none: "none" };
+                         dawn: "Dawn", alpine: "Alpine", cosmetica: "Cosmetica", velo: "Velo", none: "none" };
   const clientName = (id) => CLIENT_NAMES[id] ?? id;
   const clientColor = (id) => CLIENT_ORDER.includes(id) ? `var(--c-${id})` : "var(--muted)";
   const byOrder = (a, b) => (CLIENT_ORDER.indexOf(a) + 1 || 99) - (CLIENT_ORDER.indexOf(b) + 1 || 99);
