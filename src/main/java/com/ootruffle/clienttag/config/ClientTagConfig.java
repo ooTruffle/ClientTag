@@ -26,7 +26,8 @@ import org.polyfrost.oneconfig.api.config.v1.annotations.TextList;
  * The OneConfig settings page. Only ever loaded through {@link ClientTagSettings} when
  * OneConfig is installed - everything else reads settings through that class.
  * <p>
- * Display options are on the General tab. Each client has its own tab, where it can be
+ * Display options are on the General tab. Each client has its own tab (smaller ones share
+ * the Other Clients tab, a section each), where it can be
  * hidden, or have its icon drawn in one fixed color instead of the color its client
  * reports for each player.
  * <p>
@@ -97,12 +98,27 @@ public final class ClientTagConfig extends Config {
     @Color(title = "Color", category = "Cosmetica", alpha = false)
     public PolyColor cosmeticaColor = new PolyColor(0xFFFFFFFF);
 
-    @Switch(title = "Show Alpine Client", category = "Alpine Client")
+    // Smaller clients share the Other Clients tab, one section each.
+    @Switch(title = "Show Alpine Client", category = "Other Clients", subcategory = "Alpine Client")
     public boolean alpineEnabled = true;
-    @Switch(title = "Custom Color", description = "Use another color than teal for the Alpine mountain.", category = "Alpine Client")
+    @Switch(title = "Custom Color", description = "Use another color than teal for the Alpine mountain.", category = "Other Clients", subcategory = "Alpine Client")
     public boolean alpineCustomColor = false;
-    @Color(title = "Color", category = "Alpine Client", alpha = false)
+    @Color(title = "Color", category = "Other Clients", subcategory = "Alpine Client", alpha = false)
     public PolyColor alpineColor = new PolyColor(0xFF4FD1C5);
+
+    @Switch(title = "Show CMClient", category = "Other Clients", subcategory = "CMClient")
+    public boolean cmClientEnabled = true;
+    @Switch(title = "Custom Color", description = "Use another color than violet for the CMClient cube.", category = "Other Clients", subcategory = "CMClient")
+    public boolean cmClientCustomColor = false;
+    @Color(title = "Color", category = "Other Clients", subcategory = "CMClient", alpha = false)
+    public PolyColor cmClientColor = new PolyColor(0xFFC77DFF);
+
+    @Switch(title = "Show Velo Client", category = "Other Clients", subcategory = "Velo Client")
+    public boolean veloEnabled = true;
+    @Switch(title = "Custom Color", description = "Use one color for everyone instead of blue, and gold for Velo Plus users.", category = "Other Clients", subcategory = "Velo Client")
+    public boolean veloCustomColor = false;
+    @Color(title = "Color", category = "Other Clients", subcategory = "Velo Client", alpha = false)
+    public PolyColor veloColor = new PolyColor(0xFF4DA6FF);
 
     @Switch(title = "Show ClientTag", description = "For ClientTag users who chose to show it, or aren't on any other client. Needs the ClientTag server.", category = "ClientTag")
     public boolean clientTagEnabled = true;

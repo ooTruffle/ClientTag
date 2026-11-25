@@ -21,6 +21,7 @@ public final class IconGlyphs {
     /** Each glyph is an 8px icon followed by a 2px gap. */
     public static final int ADVANCE = 10;
     private static final int ICON_SIZE = 8;
+    private static final int FONT_FIRST = 0xE700;
 
     private static final Map<Integer, Character> CHARS = new HashMap<>();
     private static final ClientIcon.Tinted[] ICONS = new ClientIcon.Tinted[CAPACITY];
@@ -52,6 +53,24 @@ public final class IconGlyphs {
             }
         }
         return false;
+    }
+
+    /**
+     * The character drawing {@code c}'s icon in {@code minecraft:default} (assets/minecraft/font/default.json),
+     * which Argentum renders text from: the modern {@code clienttag:icons} character moved to
+     * U+E700, as the vanilla font owns U+E000 there (and PolyPlus puts its badge on it). The
+     * glyph is white; its color is {@link #color}. {@code c} itself is returned if it's no icon.
+     */
+    public static int fontChar(int c) {
+        if (c > Character.MAX_VALUE || !isIcon((char) c)) {
+            return c;
+        }
+        return FONT_FIRST + (ICONS[c - FIRST].icon().glyph() - 0xE000);
+    }
+
+    /** The RGB color to tint {@code c}'s icon with; {@code c} must be an icon. */
+    public static int color(char c) {
+        return ICONS[c - FIRST].color();
     }
 
     /** Draws the icon for {@code c} with its top-left at (x, y). */

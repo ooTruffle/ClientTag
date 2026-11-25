@@ -1,0 +1,16 @@
+{
+  "providers": [
+    {"type": "bitmap", "file": "clienttag:font/polyplus.png", "ascent": 7, "height": 8, "chars": ["\uE700"]},
+    {"type": "bitmap", "file": "clienttag:font/lunar.png", "ascent": 7, "height": 8, "chars": ["\uE701"]},
+    {"type": "bitmap", "file": "clienttag:font/dawn.png", "ascent": 7, "height": 8, "chars": ["\uE702"]},
+    {"type": "bitmap", "file": "clienttag:font/essential.png", "ascent": 7, "height": 8, "chars": ["\uE703"]},
+    {"type": "bitmap", "file": "clienttag:font/norisk.png", "ascent": 7, "height": 8, "chars": ["\uE704"]},
+    {"type": "bitmap", "file": "clienttag:font/labymod.png", "ascent": 7, "height": 8, "chars": ["\uE705"]},
+    {"type": "bitmap", "file": "clienttag:font/clienttag.png", "ascent": 7, "height": 8, "chars": ["\uE706"]},
+    {"type": "bitmap", "file": "clienttag:font/cosmetica.png", "ascent": 7, "height": 8, "chars": ["\uE707"]},
+    {"type": "bitmap", "file": "clienttag:font/flagged.png", "ascent": 7, "height": 8, "chars": ["\uE708"]},
+    {"type": "bitmap", "file": "clienttag:font/alpine.png", "ascent": 7, "height": 8, "chars": ["\uE709"]},
+    {"type": "bitmap", "file": "clienttag:font/cmclient.png", "ascent": 7, "height": 8, "chars": ["\uE70A"]},
+    {"type": "bitmap", "file": "clienttag:font/velo.png", "ascent": 7, "height": 8, "chars": ["\uE70B"]}
+  ]
+}
