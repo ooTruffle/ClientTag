@@ -2,6 +2,7 @@ package com.ootruffle.clienttag;
 
 import com.ootruffle.clienttag.config.ClientTagSettings;
 import com.ootruffle.clienttag.render.ClientIcon;
+import com.ootruffle.clienttag.update.Updater;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -37,6 +38,8 @@ public final class ClientTag {
         NativeClients.settle();
         // Flags are local, so they work before (or without) the warning being accepted.
         LocalFlags.onClientTick();
+        // Waits for the warning itself (except in its dev test), so it can show on the title screen.
+        Updater.onClientTick();
         // Nothing connects anywhere until the first-launch warning has been accepted.
         if (!Consent.accepted()) {
             Consent.askIfNeeded();

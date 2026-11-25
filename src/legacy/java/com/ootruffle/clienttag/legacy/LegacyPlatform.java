@@ -174,4 +174,14 @@ final class LegacyPlatform implements Platform {
         }));
     }
 
+    @Override
+    public boolean isOnTitleScreen() {
+        return Minecraft.getMinecraft().currentScreen instanceof net.minecraft.client.gui.GuiMainMenu;
+    }
+
+    @Override
+    public void quit() {
+        Minecraft.getMinecraft().shutdown();
+    }
+
 }

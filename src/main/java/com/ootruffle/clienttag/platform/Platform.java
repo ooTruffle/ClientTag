@@ -104,6 +104,12 @@ public interface Platform {
      */
     void ask(String title, String message, String yes, String no, int delaySeconds, Consumer<Boolean> onAnswer);
 
+    /** Whether the title screen is open (where the updater's fallback prompt waits to be shown). */
+    boolean isOnTitleScreen();
+
+    /** Closes the game, as its Quit button would. */
+    void quit();
+
     final class Holder {
         private static Platform instance;
 

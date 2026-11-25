@@ -80,7 +80,13 @@ dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
     if (isLegacy) {
         mappings(ploceus!!.mcpMappings("stable", mcVersion, sc.properties["deps.mcp_mappings"]))
-        ploceus.dependOsl(sc.properties["deps.osl"])
+        // Only the OSL modules ClientTag uses, rather than the OSL 0.20.3 bundle: its osl-core
+        // (0.10.0) doesn't match its osl-blocks and crashes dev runs on startup. OneConfig still
+        // brings the rest of OSL; core 0.11.0 is what keeps that set starting.
+        val oslEntrypoints: String = sc.properties["deps.osl_entrypoints"]
+        val oslCore: String = sc.properties["deps.osl_core"]
+        modImplementation("net.ornithemc.osl-gen2:entrypoints:$oslEntrypoints")
+        modImplementation("net.ornithemc.osl-gen2:core:$oslCore")
     } else {
         loomx.applyMojangMappings()
     }
@@ -100,7 +106,7 @@ dependencies {
     // Optional at runtime - only touched when OneConfig is loaded (see ClientTagSettings).
     // modImplementation so dev runs get the settings page; it isn't bundled into the jar.
     modImplementation("org.polyfrost.oneconfig:$mcVersion-$loader:$oneconfigVersion")
-    for (module in arrayOf("commands", "config", "config-impl", "poly-compose", "utils")) {
+    for (module in arrayOf("commands", "config", "config-impl", "notifications", "poly-compose", "utils")) {
         implementation("org.polyfrost.oneconfig:$module:$oneconfigVersion")
     }
 }
@@ -149,7 +155,9 @@ tasks {
             "java_version" to requiredJava.majorVersion,
             "minecraft_version_range" to mcCompat,
             "fabric_loader_version" to loaderVersion,
-            "oneconfig_version" to oneconfigVersion
+            "oneconfig_version" to oneconfigVersion,
+            // Which release jar is this build's ("1.21.8_fabric"), for the updater.
+            "build_target" to "${mcVersion}_$loader"
         )
 
         inputs.properties(props)

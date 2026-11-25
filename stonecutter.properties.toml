@@ -11,7 +11,8 @@ loomx.loom_version = "1.17-SNAPSHOT"
 
 ["1.8.9"]
 mod.mc_compat = "1.8.9"
-deps.osl = "0.20.3"
+deps.osl_entrypoints = "0.6.1+mc13w16a-mc1.14.4"
+deps.osl_core = "0.11.0+mc14w27a-mc1.14.4"
 deps.mcp_mappings = "22"
 
 ["1.21.1"]

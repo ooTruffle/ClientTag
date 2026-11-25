@@ -193,6 +193,16 @@ final class ModernPlatform implements Platform {
         setScreen(mc, question);
     }
 
+    @Override
+    public boolean isOnTitleScreen() {
+        return screen(Minecraft.getInstance()) instanceof net.minecraft.client.gui.screens.TitleScreen;
+    }
+
+    @Override
+    public void quit() {
+        Minecraft.getInstance().stop();
+    }
+
     // The current screen moved to Gui in 26.2.
     private static Screen screen(Minecraft mc) {
         //? if >= 26.2 {

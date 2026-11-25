@@ -24,6 +24,9 @@
     "fabricloader": ">=${fabric_loader_version}",
     "osl-entrypoints": "*"
   },
+  "custom": {
+    "clienttag:build": "${build_target}"
+  },
   "suggests": {
     "oneconfigv1": ">=${oneconfig_version}"
   }
