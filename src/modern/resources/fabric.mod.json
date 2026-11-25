@@ -22,6 +22,9 @@
     "minecraft": "${minecraft_version_range}",
     "fabricloader": ">=${fabric_loader_version}"
   },
+  "custom": {
+    "clienttag:build": "${build_target}"
+  },
   "suggests": {
     "oneconfigv1": ">=${oneconfig_version}"
   }

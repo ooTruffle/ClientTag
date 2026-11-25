@@ -56,6 +56,9 @@ public final class ClientTagConfig extends Config {
     @Switch(title = "Share Spotted Clients", description = "Tell the ClientTag server which clients you've seen other players on, for its statistics of which clients people use.", subcategory = "ClientTag Server")
     public boolean shareSeen = true;
 
+    @Switch(title = "Check for Updates", description = "Look for a newer ClientTag on GitHub when the game starts, and offer to install it.", subcategory = "Updates")
+    public boolean checkForUpdates = true;
+
     @Switch(title = "Show Lunar Client", category = "Lunar Client")
     public boolean lunarEnabled = true;
     @Switch(title = "Custom Color", description = "Use one color for everyone instead of the color Lunar reports.", category = "Lunar Client")

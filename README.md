@@ -32,6 +32,12 @@ You can flag players for your own reasons. They get a warning triangle by their 
 
 ClientTag tells the ClientTag server which client you're really on, so other ClientTag users see your real tag rather than every client's. It also tells the server which clients it has seen other players on, for statistics of which clients people use. Turn either off in the "ClientTag Server" section of `/clienttag` ("Use ClientTag Server" turns off both, "Share Spotted Clients" just the second). See [server/README.md](server/README.md) for what the server keeps.
 
+# Updates
+
+Once per launch (after the first-launch warning), ClientTag asks GitHub for the latest release. If it's newer, you're offered it: as a OneConfig notification with OneConfig installed, otherwise on the title screen. **Update** downloads the release's jar for your Minecraft version into `config/clienttag/update` (outside `mods`) and checks it against the SHA-256 GitHub lists for it. The new jar is installed when you close the game: a small helper process waits for the game to exit, puts it in `mods` and deletes the old jar. If the old jar can't be deleted, the new one is taken back out so two versions are never loaded, and the next exit tries again (see `config/clienttag/update/update.log`).
+
+Nothing is installed without clicking **Update**. Turn the check off with "Check for Updates" in `/clienttag` (needs OneConfig).
+
 # Warning
 
 This mod possibly breaks various services TOS, by installing this mod you agree that you may get your account banned on these services

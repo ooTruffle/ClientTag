@@ -68,6 +68,11 @@ public final class ClientTagSettings {
         return !LOADED || Present.flagAlerts();
     }
 
+    /** Whether to look for a newer ClientTag on GitHub once per launch (see {@link com.ootruffle.clienttag.update.Updater}). */
+    public static boolean checkForUpdates() {
+        return !LOADED || Present.checkForUpdates();
+    }
+
     /** The "name reason" rows of the flagged players list in the settings, or null without OneConfig. */
     public static String[] flagList() {
         return LOADED ? Present.flagList() : null;
@@ -183,6 +188,10 @@ public final class ClientTagSettings {
 
         static boolean flagAlerts() {
             return config().flagAlerts;
+        }
+
+        static boolean checkForUpdates() {
+            return config().checkForUpdates;
         }
 
         static String[] flagList() {
