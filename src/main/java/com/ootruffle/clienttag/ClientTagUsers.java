@@ -173,11 +173,23 @@ public final class ClientTagUsers {
         }
         final List<String> ids = new ArrayList<>();
         for (ClientIcon icon : ClientIcon.values()) {
-            if (icon != ClientIcon.CLIENTTAG && icon != ClientIcon.FLAGGED && icon.reportedColor(uuid) != null) {
+            if (icon != ClientIcon.CLIENTTAG && icon != ClientIcon.FLAGGED && seenOn(icon, uuid)) {
                 ids.add(icon.id());
             }
         }
         return ids.isEmpty() ? null : ids;
+    }
+
+    /**
+     * Whether we've seen the player on this client. Usually that's whether it has an indicator
+     * for them, but with PolyPlus installed it draws the OneClient badge itself and ours has
+     * none, so PolyPlus is asked instead (ClientTag users are already left out above).
+     */
+    private static boolean seenOn(ClientIcon icon, UUID uuid) {
+        if (icon == ClientIcon.POLYPLUS && OneConfigCompat.isInstalled()) {
+            return OneConfigCompat.isPolyPlusUser(uuid);
+        }
+        return icon.reportedColor(uuid) != null;
     }
 
     private static void addTracked(Set<UUID> tracked, UUID uuid, UUID self) {
