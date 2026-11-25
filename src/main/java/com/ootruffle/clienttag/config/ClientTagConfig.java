@@ -104,6 +104,13 @@ public final class ClientTagConfig extends Config {
     @Color(title = "Color", category = "Alpine Client", alpha = false)
     public PolyColor alpineColor = new PolyColor(0xFF4FD1C5);
 
+    @Switch(title = "Show Velo Client", category = "Other Clients", subcategory = "Velo Client")
+    public boolean veloEnabled = true;
+    @Switch(title = "Custom Color", description = "Use one color for everyone instead of blue, and gold for Velo Plus users.", category = "Other Clients", subcategory = "Velo Client")
+    public boolean veloCustomColor = false;
+    @Color(title = "Color", category = "Other Clients", subcategory = "Velo Client", alpha = false)
+    public PolyColor veloColor = new PolyColor(0xFF4DA6FF);
+
     @Switch(title = "Show ClientTag", description = "For ClientTag users who chose to show it, or aren't on any other client. Needs the ClientTag server.", category = "ClientTag")
     public boolean clientTagEnabled = true;
     @Switch(title = "Custom Color", description = "Use one color for everyone instead of the color the ClientTag server gives each player.", category = "ClientTag")

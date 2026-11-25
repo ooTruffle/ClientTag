@@ -41,6 +41,7 @@ public final class IconArt {
         icons.put("norisk", IconArt::shield);
         icons.put("labymod", IconArt::wolf);
         icons.put("alpine", IconArt::mountain);
+        icons.put("velo", IconArt::chevron);
         icons.put("clienttag", IconArt::nametag);
         icons.put("flagged", IconArt::warning);
 
@@ -151,6 +152,12 @@ public final class IconArt {
             }
             return inPolygon(x, y, smallXs, smallYs);
         });
+    }
+
+    /** A bold V: two thick strokes meeting at a point near the bottom. */
+    static void chevron(int[] pixels) {
+        paint(pixels, (x, y) -> nearSegment(x, y, 0.15, 0.17, 0.5, 0.82, 0.12)
+                || nearSegment(x, y, 0.85, 0.17, 0.5, 0.82, 0.12));
     }
 
     /** A luggage-style name tag pointing left, with a hole punched near the point. */
