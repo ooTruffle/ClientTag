@@ -5,9 +5,10 @@ mod.version = "1.2.3"
 mod.description = "Shows Lunar Client, Dawn Client, Essential, NoRiskClient, LabyMod, Alpine Client, CMClient, Velo Client and OneClient indicators next to the nametags of other players who are using those clients."
 
 deps.fabric_loader = "0.19.5"
-deps.oneconfig = "1.2.22"
+deps.oneconfig = "1.9.5"
+deps.polycompose = "3.0.9"
 
-loomx.loom_version = "1.17-SNAPSHOT"
+loomx.loom_version = "1.19-SNAPSHOT"
 
 ["1.8.9"]
 mod.mc_compat = "1.8.9"

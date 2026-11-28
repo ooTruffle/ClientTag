@@ -160,6 +160,16 @@ final class LegacyPlatform implements Platform {
     }
 
     @Override
+    public Object currentScreen() {
+        return Minecraft.getMinecraft().currentScreen;
+    }
+
+    @Override
+    public void setCurrentScreen(Object screen) {
+        Minecraft.getMinecraft().displayGuiScreen((GuiScreen) screen);
+    }
+
+    @Override
     public boolean isAsking() {
         return Minecraft.getMinecraft().currentScreen instanceof QuestionScreen;
     }

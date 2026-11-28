@@ -2,8 +2,13 @@ import net.ornithemc.ploceus.api.PloceusGradleExtensionApi
 
 plugins {
     id("dev.kikugie.loom-back-compat")
-    id("net.fabricmc.fabric-loom-remap") version "1.17-SNAPSHOT" apply false
-    id("ploceus") version "1.17-SNAPSHOT" apply false
+    id("net.fabricmc.fabric-loom-remap") version "1.19-SNAPSHOT" apply false
+    id("ploceus") version "1.19-SNAPSHOT" apply false
+    // Only for the PolyCompose consent screen (config/ConsentDialog.kt). The Kotlin stdlib isn't
+    // bundled (see gradle.properties): PolyCompose needs Fabric Language Kotlin, and nothing Kotlin
+    // loads without PolyCompose.
+    kotlin("jvm") version "2.4.20"
+    kotlin("plugin.compose") version "2.4.20"
 }
 
 // 1.8.9 runs on Ornithe with MCP names and keeps its own code in src/legacy; every other
@@ -29,6 +34,7 @@ val mcVersion: String = sc.current.version
 val mcCompat: String = sc.properties["mod.mc_compat"]
 val loaderVersion: String = sc.properties["deps.fabric_loader"]
 val oneconfigVersion: String = sc.properties["deps.oneconfig"]
+val polycomposeVersion: String = sc.properties["deps.polycompose"]
 val loader = if (isLegacy) "ornithe" else "fabric"
 
 val requiredJava: JavaVersion = when {
@@ -106,9 +112,14 @@ dependencies {
     // Optional at runtime - only touched when OneConfig is loaded (see ClientTagSettings).
     // modImplementation so dev runs get the settings page; it isn't bundled into the jar.
     modImplementation("org.polyfrost.oneconfig:$mcVersion-$loader:$oneconfigVersion")
-    for (module in arrayOf("commands", "config", "config-impl", "notifications", "poly-compose", "utils")) {
+    for (module in arrayOf("config", "config-impl", "notifications", "utils")) {
         implementation("org.polyfrost.oneconfig:$module:$oneconfigVersion")
     }
+
+    // The consent prompt's Compose UI. OneConfig 1.9 depends on PolyCompose, so it's in dev runs
+    // already; pinned here so the prompt builds against a known version. Not bundled either - the
+    // prompt falls back to the vanilla screen without it.
+    modImplementation("org.polyfrost:polycompose-$mcVersion-$loader:$polycomposeVersion")
 }
 
 loom {
@@ -188,6 +199,12 @@ tasks {
 
         from(loomx.modJar.flatMap { it.archiveFile })
         into(rootProject.layout.buildDirectory.dir("libs/$modVersion"))
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(requiredJava.majorVersion)
     }
 }
 

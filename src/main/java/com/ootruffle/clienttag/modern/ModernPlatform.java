@@ -166,6 +166,16 @@ final class ModernPlatform implements Platform {
     }
 
     @Override
+    public Object currentScreen() {
+        return screen(Minecraft.getInstance());
+    }
+
+    @Override
+    public void setCurrentScreen(Object screen) {
+        setScreen(Minecraft.getInstance(), (Screen) screen);
+    }
+
+    @Override
     public boolean isAsking() {
         return question != null && screen(Minecraft.getInstance()) == question;
     }

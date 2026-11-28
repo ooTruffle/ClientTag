@@ -97,6 +97,12 @@ public interface Platform {
     /** Whether any screen (a menu, chat, a settings page) is open over the game. */
     boolean isScreenOpen();
 
+    /** The open screen, or null - as a plain object, so shared code never names Minecraft's screen class. */
+    Object currentScreen();
+
+    /** Opens {@code screen} (a Minecraft screen from {@link #currentScreen}, or one ClientTag made), or closes it if null. */
+    void setCurrentScreen(Object screen);
+
     /**
      * Asks the player a yes/no question over whatever is open (a menu, or the world), going
      * back to it afterwards. The buttons only work after {@code delaySeconds}, so it gets read.
