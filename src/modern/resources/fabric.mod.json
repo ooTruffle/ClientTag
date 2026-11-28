@@ -7,6 +7,11 @@
   "authors": [
     "ooTruffle"
   ],
+  "contact": {
+    "homepage": "https://github.com/ooTruffle/ClientTag",
+    "sources": "https://github.com/ooTruffle/ClientTag",
+    "issues": "https://github.com/ooTruffle/ClientTag/issues"
+  },
   "environment": "client",
   "entrypoints": {
     "client": [

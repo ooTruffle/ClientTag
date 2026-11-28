@@ -1,5 +1,6 @@
 package com.ootruffle.clienttag;
 
+import com.ootruffle.clienttag.config.ConsentPrompt;
 import com.ootruffle.clienttag.platform.Platform;
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,7 +17,8 @@ import org.apache.logging.log4j.Logger;
  * The first-launch warning. Nothing connects anywhere until it's accepted - in the prompt, or
  * by setting {@code accepted=true} in config/clienttag/consent.properties (e.g. for a modpack).
  * <p>
- * It's an in-game screen over whatever is open once the game has loaded, opened again if another
+ * It's an in-game screen over whatever is open once the game has loaded - drawn with PolyCompose
+ * when that's installed - opened again if another
  * mod (or a client like Lunar) replaces it before it's answered. Its buttons only work after
  * {@link #DELAY_SECONDS}. Declining keeps ClientTag idle
  * until the next launch, which asks again. Bumping {@link #VERSION} asks everyone again.
@@ -67,11 +69,14 @@ public final class Consent {
             return;
         }
         final Platform platform = Platform.get();
-        if (!platform.canAsk() || platform.isAsking() || --reopenCooldown > 0) {
+        if (!platform.canAsk() || platform.isAsking() || ConsentPrompt.isAsking() || --reopenCooldown > 0) {
             return;
         }
         reopenCooldown = REOPEN_TICKS;
-        platform.ask(TITLE, MESSAGE, YES, NO, DELAY_SECONDS, Consent::answer);
+        // PolyCompose's UI when it's installed, the vanilla screen otherwise.
+        if (!ConsentPrompt.ask(TITLE, MESSAGE, YES, NO, DELAY_SECONDS, Consent::answer)) {
+            platform.ask(TITLE, MESSAGE, YES, NO, DELAY_SECONDS, Consent::answer);
+        }
     }
 
     private static void answer(boolean yes) {
